@@ -185,7 +185,7 @@ Phase 1: Core (6-8周)          Phase 2: Box (4-6周)           Phase 3: Enterpr
 | 零售页面 | 市场 | 官网产品页 |
 | 销售渠道 | 市场 | 电商平台入驻 |
 
-**里程碑**：Claw Box 量产准备完成
+**里程碑**：Claw One 量产准备完成
 
 ---
 
