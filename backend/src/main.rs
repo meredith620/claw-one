@@ -1,16 +1,21 @@
 use axum::{
-    routing::get,
+    routing::{get, post},
     Router,
     response::Json,
 };
 use serde_json::json;
 use std::net::SocketAddr;
-use tracing::{info, warn};
+use std::sync::Arc;
+use tracing::info;
 
 mod api;
 mod config;
+mod error;
 mod runtime;
 mod state;
+mod types;
+
+use config::ConfigManager;
 
 #[tokio::main]
 async fn main() {
@@ -19,13 +24,16 @@ async fn main() {
         .with_env_filter("claw_one=debug,tower_http=debug")
         .init();
 
-    info!("Starting Claw One backend...");
+    info!("Starting Claw One backend v{}", env!("CARGO_PKG_VERSION"));
 
     // 确保单实例
     if let Err(e) = ensure_single_instance() {
         eprintln!("Failed to start: {}", e);
         std::process::exit(1);
     }
+
+    // 初始化配置管理器
+    let config_manager = Arc::new(ConfigManager::new());
 
     // 构建路由
     let app = Router::new()
@@ -36,7 +44,9 @@ async fn main() {
         .route("/api/rollback", post(api::rollback::handler))
         .route("/api/logs", get(api::logs::handler))
         // 静态文件服务（Vue 构建产物）
-        .fallback_service(tower_http::services::ServeDir::new("../static/dist"));
+        .fallback_service(tower_http::services::ServeDir::new("../static/dist"))
+        // 共享状态
+        .layer(axum::extract::Extension(config_manager));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!("Listening on http://{}", addr);
