@@ -109,7 +109,25 @@ claw-one/
 
 ## 3. 核心功能设计
 
-### 3.1 配置管理（D3）
+### 3.1 配置验证（新增）
+
+使用 **JSON Schema** 进行配置验证：
+
+```rust
+// src/validation.rs
+const CONFIG_SCHEMA: &str = include_str!("../schemas/openclaw.schema.json");
+
+pub fn validate_config(config: &Value) -> Result<(), Vec<String>> {
+    let schema: Value = serde_json::from_str(CONFIG_SCHEMA)?;
+    // 使用 jsonschema 或手动验证
+    // 1. 类型检查（port 必须是 number）
+    // 2. 必填项检查（models, channels）
+    // 3. 范围检查（port 1-65535）
+    // 4. 交叉引用检查（channels 引用的 model 必须存在）
+}
+```
+
+**Schema 来源**: 参考 OpenClaw 源码中的类型定义自行维护
 
 #### 流程
 ```
@@ -128,7 +146,28 @@ systemctl restart openclaw
          └── 系统错误 → 进入 Safe Mode（不回滚，用户决定）
 ```
 
-#### Git 快照
+#### Git 快照（更新）
+
+```
+/var/lib/claw/
+├── openclaw.json           # 当前配置（~/.openclaw/openclaw.json 的链接或复制）
+├── .git/                   # Git 仓库
+├── factory-config.json     # 出厂配置（openclaw 初始化后的配置）
+└── .applying               # 标记文件
+```
+
+**Git 提交**: 
+```rust
+Command::new("git")
+    .args([
+        "-C", "/var/lib/claw",
+        "commit", 
+        "-m", &format!("Config update at {}", timestamp()),
+        "--author", "Claw One <dev@claw.one>"
+    ])
+```
+
+**快照保留**: 近 3 个月（约 90 天），MVP 先保留最近 100 个提交
 ```
 /var/lib/claw/
 ├── openclaw.json           # 当前配置
@@ -185,7 +224,37 @@ impl ClawRuntime for OpenClawAdapter { ... }
 pub struct PicoClawAdapter { ... }
 ```
 
-### 3.4 安全隔离（D4）
+### 日志获取（新增）
+
+**OpenClaw 日志位置**:
+```
+~/.openclaw/logs/
+├── commands.log           # 命令日志
+└── config-audit.jsonl     # 配置审计日志
+```
+
+**Rust 实现**:
+```rust
+pub async fn get_logs(tail: usize) -> Result<String, Error> {
+    // 直接读取日志文件（不依赖 OpenClaw 运行）
+    let log_path = dirs::home_dir()
+        .unwrap()
+        .join(".openclaw")
+        .join("logs")
+        .join("commands.log");
+    
+    fs::read_to_string(&log_path).await
+}
+
+// 或使用 openclaw logs 命令（如果 OpenClaw 运行中）
+pub async fn get_logs_via_cli(limit: usize) -> Result<String, Error> {
+    let output = Command::new("openclaw")
+        .args(["logs", "--limit", &limit.to_string()])
+        .output()
+        .await?;
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+```
 
 **无软件层隔离**，依赖：
 - Box 硬件物理隔离
@@ -358,3 +427,411 @@ WantedBy=multi-user.target
 ---
 
 *文档完成，待开发*
+# OpenClaw 调研结果汇总
+
+**日期**: 2026-03-03  
+**来源**: 本地 CLI 调研 + Agent 搜索
+
+---
+
+## 1. Rust `include_str!` 宏
+
+### 说明
+- **类型**: Rust 标准库内置宏（非 OpenClaw 提供）
+- **功能**: 编译时将文件内容作为字符串常量嵌入二进制
+- **用法**:
+```rust
+const SCHEMA: &str = include_str!("../schemas/openclaw.schema.json");
+```
+
+### Schema 来源
+- 需自行维护 `schemas/openclaw.schema.json` 文件
+- 可参考 OpenClaw 源码中的类型定义
+- 或直接复制 OpenClaw 的 schema（如果公开）
+
+---
+
+## 2. OpenClaw 日志位置
+
+### 日志目录
+```
+~/.openclaw/logs/
+├── commands.log          # 命令执行日志
+├── gateway.log           # Gateway 运行日志
+└── config-audit.jsonl    # 配置变更审计日志
+```
+
+### 获取方式
+
+**方式 1: CLI 命令（RPC 方式）**
+```bash
+openclaw logs [--follow] [--limit 200] [--json]
+```
+- 需要 OpenClaw Gateway 正在运行
+- 通过 RPC 获取日志
+
+**方式 2: 直接读取文件**
+```rust
+pub async fn get_logs() -> Result<String, Error> {
+    let log_path = dirs::home_dir()
+        .unwrap()
+        .join(".openclaw")
+        .join("logs")
+        .join("gateway.log");
+    
+    fs::read_to_string(&log_path).await
+}
+```
+- 不需要 OpenClaw 运行
+- 直接读取本地文件
+
+### 推荐方案
+```rust
+pub async fn get_logs(tail: usize) -> Result<String, Error> {
+    // 优先尝试直接读文件（更可靠）
+    let log_path = get_logs_dir().join("gateway.log");
+    
+    match fs::read_to_string(&log_path).await {
+        Ok(content) => Ok(content),
+        Err(_) => {
+            // 备用：通过 CLI 获取
+            get_logs_via_cli(tail).await
+        }
+    }
+}
+```
+
+---
+
+## 3. OpenClaw 健康检查
+
+### 检查方式对比
+
+| 方式 | 命令/端点 | 速度 | 可靠性 | 适用场景 |
+|------|----------|------|--------|---------|
+| **HTTP 健康端点** | `GET http://127.0.0.1:18790/health` | 快 | 高 | 首选方式 |
+| **health 命令** | `openclaw health --json` | 中 | 高 | 备用方式 |
+| **gateway status** | `openclaw gateway status --json` | 中 | 高 | 详细状态 |
+| **进程检查** | `pgrep -f "openclaw gateway"` | 快 | 中 | 快速判断 |
+
+### 推荐实现
+
+```rust
+pub enum OpenClawState {
+    Running,           // 正常运行
+    Starting,          // 启动中（进程在，但未就绪）
+    ConfigError {      // 配置错误导致启动失败
+        error: String,
+        auto_rolled_back: bool,
+    },
+    SystemError {      // 系统错误（端口占用等）
+        error: String,
+    },
+    Stopped,           // 已停止
+    Unknown,           // 未知状态
+}
+
+pub async fn check_state(&self) -> OpenClawState {
+    // 1. 快速进程检查
+    if !self.process_running().await {
+        return OpenClawState::Stopped;
+    }
+    
+    // 2. HTTP 健康检查（默认端口 18790）
+    let port = self.get_gateway_port().await.unwrap_or(18790);
+    match self.http_health_check(port).await {
+        Ok(true) => return OpenClawState::Running,
+        Ok(false) => {
+            // 服务未就绪，可能在启动中
+            if self.is_starting_recently().await {
+                return OpenClawState::Starting;
+            }
+        }
+        Err(_) => {}
+    }
+    
+    // 3. CLI health 命令（备用）
+    match self.cli_health_check().await {
+        Ok(status) if status.healthy => return OpenClawState::Running,
+        Ok(status) => {
+            // 根据错误信息判断类型
+            return self.classify_error(&status.error).await;
+        }
+        Err(_) => {}
+    }
+    
+    // 4. 检查日志判断错误类型
+    self.determine_error_from_logs().await
+}
+
+// HTTP 健康检查
+async fn http_health_check(&self, port: u16) -> Result<bool, Error> {
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:{}/health", port);
+    
+    match client.get(&url).timeout(Duration::from_secs(5)).send().await {
+        Ok(resp) => Ok(resp.status().is_success()),
+        Err(_) => Ok(false),
+    }
+}
+
+// CLI health 检查
+async fn cli_health_check(&self) -> Result<HealthStatus, Error> {
+    let output = Command::new("openclaw")
+        .args(["health", "--json"])
+        .output()
+        .await?;
+    
+    if !output.status.success() {
+        return Err(Error::CommandFailed);
+    }
+    
+    let status: HealthStatus = serde_json::from_slice(&output.stdout)?;
+    Ok(status)
+}
+```
+
+### 错误分类关键词
+
+```rust
+fn classify_error(&self, log_content: &str) -> OpenClawState {
+    // 配置错误关键词
+    let config_errors = [
+        "Config validation failed",
+        "Invalid API key",
+        "Missing required field",
+        "Cannot parse config",
+        "SyntaxError",
+    ];
+    
+    // 系统错误关键词
+    let system_errors = [
+        "EADDRINUSE",           // 端口占用
+        "Permission denied",    // 权限不足
+        "Out of memory",        // 内存不足
+        "ENOSPC",               // 磁盘满
+    ];
+    
+    for pattern in &config_errors {
+        if log_content.contains(pattern) {
+            return OpenClawState::ConfigError {
+                error: log_content.to_string(),
+                auto_rolled_back: false,
+            };
+        }
+    }
+    
+    for pattern in &system_errors {
+        if log_content.contains(pattern) {
+            return OpenClawState::SystemError {
+                error: log_content.to_string(),
+            };
+        }
+    }
+    
+    OpenClawState::Unknown
+}
+```
+
+---
+
+## 4. 单实例控制
+
+### 实现方案
+
+```rust
+use fs2::FileExt;
+
+pub struct InstanceLock {
+    file: File,
+}
+
+impl InstanceLock {
+    pub fn acquire() -> Result<Self, Error> {
+        let lock_path = std::env::temp_dir().join("claw-one.lock");
+        
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&lock_path)
+            .map_err(|e| Error::LockFailed(e.to_string()))?;
+        
+        // 尝试获取独占锁
+        match file.try_lock_exclusive() {
+            Ok(()) => Ok(InstanceLock { file }),
+            Err(_) => Err(Error::AlreadyRunning),
+        }
+    }
+}
+
+impl Drop for InstanceLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
+}
+```
+
+### 使用方式
+
+```rust
+fn main() -> Result<(), Error> {
+    // 确保单实例
+    let _lock = InstanceLock::acquire()
+        .map_err(|_| {
+            eprintln!("Claw One is already running!");
+            std::process::exit(1);
+        })?;
+    
+    // 继续启动...
+}
+```
+
+---
+
+## 5. 配置验证 Schema
+
+### 建议的 Schema 结构
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenClaw Config",
+  "type": "object",
+  "required": ["gateway", "models", "channels"],
+  "properties": {
+    "gateway": {
+      "type": "object",
+      "required": ["port"],
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "bind": {
+          "type": "string",
+          "default": "127.0.0.1"
+        }
+      }
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "provider", "apiKey"],
+        "properties": {
+          "id": { "type": "string" },
+          "provider": { "type": "string" },
+          "apiKey": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" }
+        }
+      }
+    }
+  }
+}
+```
+
+### Rust 验证代码
+
+```rust
+use serde_json::Value;
+
+pub struct ConfigValidator {
+    schema: Value,
+}
+
+impl ConfigValidator {
+    pub fn new() -> Result<Self, Error> {
+        let schema = serde_json::from_str(CONFIG_SCHEMA)?;
+        Ok(Self { schema })
+    }
+    
+    pub fn validate(&self, config: &Value) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        
+        // 1. 基本结构验证
+        if !config.is_object() {
+            errors.push("Config must be an object".to_string());
+            return Err(errors);
+        }
+        
+        // 2. 必填字段
+        let required = ["gateway", "models", "channels"];
+        for field in &required {
+            if config.get(field).is_none() {
+                errors.push(format!("Missing required field: {}", field));
+            }
+        }
+        
+        // 3. 类型验证
+        if let Some(gateway) = config.get("gateway") {
+            if let Some(port) = gateway.get("port") {
+                if let Some(num) = port.as_u64() {
+                    if num < 1 || num > 65535 {
+                        errors.push(format!("Port {} out of range (1-65535)", num));
+                    }
+                } else {
+                    errors.push("Port must be a number".to_string());
+                }
+            }
+        }
+        
+        // 4. 交叉引用验证
+        if let (Some(models), Some(channels)) = 
+            (config.get("models"), config.get("channels")) {
+            // 验证 channels 引用的 models 存在
+        }
+        
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+```
+
+---
+
+## 6. 其他确认项
+
+### Git 提交作者
+```rust
+Command::new("git")
+    .args([
+        "commit",
+        "-m", message,
+        "--author", "Claw One <dev@claw.one>"
+    ])
+```
+
+### 快照保留策略
+- 保留近 3 个月（约 90 天）
+- MVP 简化：保留最近 100 个提交
+- V2 实现完整清理策略
+
+### 配置文件路径
+- 默认: `~/.openclaw/openclaw.json`
+- 环境变量覆盖: `CLAW_ONE_CONFIG`
+
+### 出厂配置来源
+- OpenClaw 初始化后的配置
+- 位置: `/var/lib/claw/factory-config.json`
+
+---
+
+*调研完成，待合并到 FINAL_DESIGN.md*
+
+---
+
+*RESEARCH_FINDINGS.md 已合并到本文档*
