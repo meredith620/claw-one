@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::{
     config::ConfigManager,
     error::Result,
-    types::{Snapshot, SnapshotsResponse},
+    types::SnapshotsResponse,
 };
 
 pub async fn handler(
