@@ -39,4 +39,9 @@ export const restartService = () => api.post('/restart')
 // 日志
 export const getLogs = () => api.get('/logs')
 
+// 首次启动向导
+export const checkFirstSetup = () => api.get<{ is_first_setup: boolean }>('/setup/check')
+export const completeSetup = () => api.post('/setup/complete')
+export const resetToFactory = () => api.post('/setup/reset')
+
 export default api

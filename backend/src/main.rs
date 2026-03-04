@@ -48,6 +48,10 @@ async fn main() {
         .route("/api/rollback", post(api::rollback::handler))
         .route("/api/logs", get(api::logs::handler))
         .route("/api/restart", post(api::restart::handler))
+        // 首次启动向导相关 API
+        .route("/api/setup/check", get(api::setup::check_handler))
+        .route("/api/setup/complete", post(api::setup::complete_handler))
+        .route("/api/setup/reset", post(api::setup::reset_handler))
         // 静态文件服务（Vue 构建产物）
         .fallback_service(tower_http::services::ServeDir::new("../static/dist"))
         // 共享状态

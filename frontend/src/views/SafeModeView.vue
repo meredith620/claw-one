@@ -100,7 +100,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getState, getLogs, getSnapshots, rollback, restartService } from '../api'
+import { getState, getLogs, getSnapshots, rollback, restartService, resetToFactory as apiResetToFactory } from '../api'
 import type { StateResponse, Snapshot } from '../types'
 
 const router = useRouter()
@@ -234,7 +234,7 @@ const forceApply = async () => {
 const resetToFactory = async () => {
   try {
     await ElMessageBox.confirm(
-      '恢复出厂设置将清除所有配置，确定继续吗？',
+      '恢复出厂设置将清除所有配置并重启服务，确定继续吗？',
       '警告',
       {
         confirmButtonText: '确定恢复',
@@ -243,10 +243,17 @@ const resetToFactory = async () => {
       }
     )
 
-    // TODO: 实现恢复出厂设置
-    ElMessage.info('功能开发中...')
-  } catch (error) {
-    // 取消
+    const response = await apiResetToFactory()
+    ElMessage.success('已恢复出厂设置，正在重启服务...')
+
+    // 等待几秒后检查状态
+    setTimeout(() => {
+      fetchState()
+    }, 5000)
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('恢复出厂设置失败')
+    }
   }
 }
 

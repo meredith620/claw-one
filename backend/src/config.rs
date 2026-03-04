@@ -1,11 +1,17 @@
 use std::path::PathBuf;
 use std::process::Command;
 use chrono::Utc;
+use tokio::fs;
 
 use crate::{
     error::{AppError, Result},
     types::{Config, Snapshot},
 };
+
+/// 出厂配置文件名
+const FACTORY_CONFIG_FILE: &str = "factory-config.json";
+/// 首次配置标记文件名
+const INIT_FLAG_FILE: &str = ".initialized";
 
 /// 配置管理器 - 负责配置文件的读写和 Git 版本控制
 pub struct ConfigManager {
@@ -34,6 +40,94 @@ impl ConfigManager {
             config_path,
             git_dir,
         }
+    }
+
+    /// 检查是否是首次配置（未初始化）
+    pub async fn is_first_setup(&self) -> Result<bool> {
+        // 检查初始化标记文件
+        let init_flag = self.git_dir.join(INIT_FLAG_FILE);
+        if init_flag.exists() {
+            return Ok(false);
+        }
+        
+        // 检查配置文件是否存在且有内容
+        if !self.config_path.exists() {
+            return Ok(true);
+        }
+        
+        // 检查配置文件是否为空或只有基本结构
+        let content = fs::read_to_string(&self.config_path).await?;
+        let config: Config = serde_json::from_str(&content)?;
+        
+        // 如果配置为空对象或没有关键字段，认为是首次配置
+        if let Some(obj) = config.as_object() {
+            if obj.is_empty() {
+                return Ok(true);
+            }
+            // 检查是否有模型或渠道配置
+            let has_models = obj.get("models")
+                .and_then(|m| m.as_object())
+                .map(|m| !m.is_empty())
+                .unwrap_or(false);
+            let has_channels = obj.get("channels")
+                .and_then(|c| c.as_array())
+                .map(|c| !c.is_empty())
+                .unwrap_or(false);
+            
+            if !has_models && !has_channels {
+                return Ok(true);
+            }
+        }
+        
+        Ok(false)
+    }
+
+    /// 标记初始化完成
+    pub async fn mark_initialized(&self) -> Result<()> {
+        let init_flag = self.git_dir.join(INIT_FLAG_FILE);
+        fs::write(&init_flag, Utc::now().to_rfc3339()).await?;
+        Ok(())
+    }
+
+    /// 保存出厂配置
+    pub async fn save_factory_config(&self, config: &Config) -> Result<()> {
+        let factory_path = self.git_dir.join(FACTORY_CONFIG_FILE);
+        let content = serde_json::to_string_pretty(config)?;
+        fs::write(&factory_path, content).await?;
+        Ok(())
+    }
+
+    /// 恢复出厂设置
+    pub async fn reset_to_factory(&self) -> Result<Config> {
+        let factory_path = self.git_dir.join(FACTORY_CONFIG_FILE);
+        
+        if !factory_path.exists() {
+            // 如果没有出厂配置，创建最小配置
+            let minimal: Config = serde_json::json!({
+                "version": "1.0",
+                "gateway": {
+                    "port": 18790,
+                    "bind": "127.0.0.1"
+                },
+                "models": {},
+                "channels": []
+            });
+            self.save_factory_config(&minimal).await?;
+            return Ok(minimal);
+        }
+        
+        let content = fs::read_to_string(&factory_path).await?;
+        let config: Config = serde_json::from_str(&content)?;
+        
+        // 应用出厂配置
+        self.save_config(&config).await?;
+        
+        // 创建 Git 提交记录
+        self.ensure_git_repo().await?;
+        self.git_add(".").await?;
+        self.git_commit("Reset to factory settings").await?;
+        
+        Ok(config)
     }
 
     /// 确保 Git 仓库已初始化

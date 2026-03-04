@@ -2,13 +2,19 @@ import { createRouter, createWebHistory } from 'vue-router'
 import ConfigView from '../views/ConfigView.vue'
 import StatusView from '../views/StatusView.vue'
 import SafeModeView from '../views/SafeModeView.vue'
+import SetupWizard from '../views/SetupWizard.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/status',
+      redirect: '/setup',
+    },
+    {
+      path: '/setup',
+      name: 'Setup',
+      component: SetupWizard,
     },
     {
       path: '/status',
