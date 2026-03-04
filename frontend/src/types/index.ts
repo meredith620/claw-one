@@ -1,28 +1,6 @@
 // API 类型定义
 
-export interface Config {
-  version: string
-  gateway: GatewayConfig
-  models: ModelConfig[]
-  channels: ChannelConfig[]
-}
-
-export interface GatewayConfig {
-  port: number
-  bind: string
-}
-
-export interface ModelConfig {
-  id: string
-  provider: string
-  apiKey?: string
-}
-
-export interface ChannelConfig {
-  id: string
-  type: string
-  enabled: boolean
-}
+export type Config = Record<string, any>
 
 export type OpenClawState =
   | { type: 'running' }

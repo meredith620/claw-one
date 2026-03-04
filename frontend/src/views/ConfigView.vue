@@ -3,123 +3,32 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>配置向导</span>
+          <span>配置编辑</span>
           <el-button @click="goBack">返回</el-button>
         </div>
       </template>
 
-      <!-- 配置表单 -->
-      <el-form
-        ref="formRef"
-        :model="config"
-        label-position="top"
-        v-loading="loading"
-      >
-        <!-- Gateway 配置 -->
-        <el-divider>Gateway 配置</el-divider>
+      <!-- JSON 编辑器 -->
+      <el-form v-loading="loading">
+        <el-form-item label="配置文件 (JSON)">
+          <el-input
+            v-model="configJson"
+            type="textarea"
+            :rows="20"
+            placeholder="配置 JSON..."
+            @input="onInput"
+          />
+        </el-form-item>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="端口" prop="gateway.port">
-              <el-input-number
-                v-model="config.gateway.port"
-                :min="1"
-                :max="65535"
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="绑定地址" prop="gateway.bind">
-              <el-input v-model="config.gateway.bind" placeholder="127.0.0.1" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <!-- JSON 格式错误提示 -->
+        <el-alert
+          v-if="parseError"
+          :title="parseError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
 
-        <!-- 模型配置 -->
-        <el-divider>
-          模型配置
-          <el-button type="primary" size="small" @click="addModel">
-            添加模型
-          </el-button>
-        </el-divider>
-
-        <div v-for="(model, index) in config.models" :key="index" class="model-item">
-          <el-card shadow="hover">
-            <template #header>
-              <div class="item-header">
-                <span>模型 #{{ index + 1 }}</span>
-                <el-button type="danger" size="small" @click="removeModel(index)">删除</el-button>
-              </div>
-            </template>
-
-            <el-row :gutter="20">
-              <el-col :span="8">
-                <el-form-item :label="`ID`" :prop="`models.${index}.id`">
-                  <el-input v-model="model.id" placeholder="如: gpt-4" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="`提供商`" :prop="`models.${index}.provider`">
-                  <el-input v-model="model.provider" placeholder="如: openai" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="`API Key`" :prop="`models.${index}.apiKey`">
-                  <el-input
-                    v-model="model.apiKey"
-                    type="password"
-                    placeholder="输入 API Key"
-                    show-password
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-card>
-        </div>
-
-        <el-empty v-if="config.models.length === 0" description="暂无模型配置" />
-
-        <!-- 渠道配置 -->
-        <el-divider>
-          渠道配置
-          <el-button type="primary" size="small" @click="addChannel">
-            添加渠道
-          </el-button>
-        </el-divider>
-
-        <div v-for="(channel, index) in config.channels" :key="index" class="channel-item">
-          <el-card shadow="hover">
-            <template #header>
-              <div class="item-header">
-                <span>渠道 #{{ index + 1 }}</span>
-                <el-button type="danger" size="small" @click="removeChannel(index)">删除</el-button>
-              </div>
-            </template>
-
-            <el-row :gutter="20">
-              <el-col :span="8">
-                <el-form-item :label="`ID`" :prop="`channels.${index}.id`">
-                  <el-input v-model="channel.id" placeholder="如: telegram-bot" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="`类型`" :prop="`channels.${index}.type`">
-                  <el-input v-model="channel.type" placeholder="如: telegram" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="`启用`" :prop="`channels.${index}.enabled`">
-                  <el-switch v-model="channel.enabled" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-card>
-        </div>
-
-        <el-empty v-if="config.channels.length === 0" description="暂无渠道配置" />
-
-        <!-- 提交区域 -->
         <el-divider />
 
         <el-form-item label="提交信息（可选）">
@@ -132,12 +41,19 @@
         </el-form-item>
 
         <div class="actions">
-          <el-button type="primary" size="large" @click="submitConfig" :loading="submitting">
+          <el-button
+            type="primary"
+            size="large"
+            @click="submitConfig"
+            :loading="submitting"
+            :disabled="!!parseError"
+          >
             <el-icon><Check /></el-icon>
             应用配置
           </el-button>
 
           <el-button size="large" @click="resetConfig">重置</el-button>
+          <el-button size="large" @click="formatJson">格式化</el-button>
         </div>
       </el-form>
     </el-card>
@@ -164,7 +80,9 @@
       </div>
 
       <template #footer>
-        <el-button v-if="progressError" @click="showProgress = false">关闭</el-button>
+        <el-button v-if="progressError" @click="showProgress = false"
+          >关闭</el-button
+        >
       </template>
     </el-dialog>
   </div>
@@ -176,28 +94,16 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { getConfig, applyConfig } from '../api'
-import type { Config } from '../types'
 
 const router = useRouter()
-const formRef = ref()
-
-// 默认配置
-const defaultConfig: Config = {
-  version: '1.0',
-  gateway: {
-    port: 18790,
-    bind: '127.0.0.1',
-  },
-  models: [],
-  channels: [],
-}
 
 // 状态
-const config = ref<Config>({ ...defaultConfig })
-const originalConfig = ref<Config>({ ...defaultConfig })
+const configJson = ref('')
+const originalJson = ref('')
 const loading = ref(false)
 const submitting = ref(false)
 const commitMessage = ref('')
+const parseError = ref('')
 const showProgress = ref(false)
 const progressStep = ref(0)
 const progressError = ref('')
@@ -207,54 +113,59 @@ const fetchConfig = async () => {
   loading.value = true
   try {
     const response = await getConfig()
-    config.value = response.data
-    originalConfig.value = JSON.parse(JSON.stringify(response.data))
-  } catch (error) {
-    // 如果配置文件不存在，使用默认配置
-    console.log('Using default config')
+    configJson.value = JSON.stringify(response.data, null, 2)
+    originalJson.value = configJson.value
+    parseError.value = ''
+  } catch (error: any) {
+    if (error.response?.status === 404) {
+      // 配置文件不存在，使用空对象
+      configJson.value = '{}'
+      originalJson.value = '{}'
+    } else {
+      ElMessage.error('获取配置失败')
+    }
   } finally {
     loading.value = false
   }
 }
 
-// 添加模型
-const addModel = () => {
-  config.value.models.push({
-    id: '',
-    provider: '',
-    apiKey: '',
-  })
+// 输入时验证 JSON
+const onInput = () => {
+  try {
+    JSON.parse(configJson.value)
+    parseError.value = ''
+  } catch (e: any) {
+    parseError.value = 'JSON 格式错误: ' + e.message
+  }
 }
 
-// 删除模型
-const removeModel = (index: number) => {
-  config.value.models.splice(index, 1)
-}
-
-// 添加渠道
-const addChannel = () => {
-  config.value.channels.push({
-    id: '',
-    type: '',
-    enabled: true,
-  })
-}
-
-// 删除渠道
-const removeChannel = (index: number) => {
-  config.value.channels.splice(index, 1)
+// 格式化 JSON
+const formatJson = () => {
+  try {
+    const parsed = JSON.parse(configJson.value)
+    configJson.value = JSON.stringify(parsed, null, 2)
+    parseError.value = ''
+    ElMessage.success('格式化成功')
+  } catch (e: any) {
+    parseError.value = 'JSON 格式错误: ' + e.message
+    ElMessage.error('格式化失败')
+  }
 }
 
 // 提交配置
 const submitConfig = async () => {
-  // 基本验证
-  if (config.value.gateway.port < 1 || config.value.gateway.port > 65535) {
-    ElMessage.error('端口必须在 1-65535 之间')
+  // 验证 JSON
+  let config: any
+  try {
+    config = JSON.parse(configJson.value)
+  } catch (e: any) {
+    parseError.value = 'JSON 格式错误: ' + e.message
+    ElMessage.error(parseError.value)
     return
   }
 
   // 检查是否有变更
-  if (JSON.stringify(config.value) === JSON.stringify(originalConfig.value)) {
+  if (configJson.value === originalJson.value) {
     ElMessage.warning('配置没有变更')
     return
   }
@@ -267,25 +178,25 @@ const submitConfig = async () => {
   try {
     // 步骤 1: 保存配置
     progressStep.value = 0
-    await new Promise(resolve => setTimeout(resolve, 500)) // 视觉延迟
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
     // 步骤 2: 重启服务
     progressStep.value = 1
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
     // 调用 API
     const response = await applyConfig({
-      config: config.value,
+      config,
       message: commitMessage.value || undefined,
     })
 
     // 步骤 3: 健康检查
     progressStep.value = 2
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
     if (response.data.success) {
       ElMessage.success('配置应用成功')
-      originalConfig.value = JSON.parse(JSON.stringify(config.value))
+      originalJson.value = configJson.value
       setTimeout(() => {
         showProgress.value = false
         router.push('/status')
@@ -303,8 +214,9 @@ const submitConfig = async () => {
 
 // 重置配置
 const resetConfig = () => {
-  config.value = JSON.parse(JSON.stringify(originalConfig.value))
+  configJson.value = originalJson.value
   commitMessage.value = ''
+  parseError.value = ''
   ElMessage.info('配置已重置')
 }
 
@@ -327,17 +239,6 @@ onMounted(() => {
 }
 
 .card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.model-item,
-.channel-item {
-  margin-bottom: 15px;
-}
-
-.item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
