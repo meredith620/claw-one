@@ -16,6 +16,7 @@ mod state;
 mod types;
 
 use config::ConfigManager;
+use state::StateManager;
 
 #[tokio::main]
 async fn main() {
@@ -34,6 +35,9 @@ async fn main() {
 
     // 初始化配置管理器
     let config_manager = Arc::new(ConfigManager::new());
+    
+    // 初始化状态管理器
+    let state_manager = Arc::new(StateManager::new(config_manager.clone()));
 
     // 构建路由
     let app = Router::new()
@@ -43,10 +47,12 @@ async fn main() {
         .route("/api/snapshots", get(api::snapshots::handler))
         .route("/api/rollback", post(api::rollback::handler))
         .route("/api/logs", get(api::logs::handler))
+        .route("/api/restart", post(api::restart::handler))
         // 静态文件服务（Vue 构建产物）
         .fallback_service(tower_http::services::ServeDir::new("../static/dist"))
         // 共享状态
-        .layer(axum::extract::Extension(config_manager));
+        .layer(axum::extract::Extension(config_manager))
+        .layer(axum::extract::Extension(state_manager));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!("Listening on http://{}", addr);

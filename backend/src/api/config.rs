@@ -7,6 +7,7 @@ use std::sync::Arc;
 use crate::{
     config::ConfigManager,
     error::Result,
+    state::StateManager,
     types::{ApplyConfigRequest, Config},
 };
 
@@ -18,15 +19,14 @@ pub async fn get_handler(
 }
 
 pub async fn post_handler(
-    Extension(config_manager): Extension<Arc<ConfigManager>>,
+    Extension(state_manager): Extension<Arc<StateManager>>,
     Json(request): Json<ApplyConfigRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    // 应用配置并创建 Git 提交
-    let commit_id = config_manager.apply_config(request.config, request.message).await?;
+    // 使用 StateManager 进行事务性配置应用
+    state_manager.apply_config(request.config, request.message).await?;
 
     Ok(Json(serde_json::json!({
         "success": true,
         "message": "Config applied successfully",
-        "commit_id": commit_id,
     })))
 }

@@ -13,6 +13,7 @@ pub enum OpenClawState {
         error: String,
     },
     Stopped,
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
