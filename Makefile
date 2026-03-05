@@ -35,10 +35,10 @@ APP_NAME := claw-one
 
 .DEFAULT_GOAL := help
 
-.PHONY: help deps compile run install uninstall clean dist package
+.PHONY: help deps compile install uninstall clean dist package
 
 # ============================================
-# 开发工作流 (deps → compile → run → install)
+# 开发工作流 (deps → compile → install)
 # ============================================
 
 ## 安装所有依赖 (deps)
@@ -61,17 +61,10 @@ compile: deps
 	@echo "  后端二进制: $(BACKEND_DIR)/target/release/claw-one-backend"
 	@echo "  前端产物: $(STATIC_DIR)/"
 
-## 调试运行 (run) - 依赖: compile
-run: compile
-	@echo "🚀 启动调试运行..."
-	@echo "  前端: http://localhost:5173 (如使用dev模式)"
-	@echo "  后端: http://localhost:8080"
-	@echo "  按 Ctrl+C 停止"
-	cd $(BACKEND_DIR) && $(CARGO) run
-
-## 完整安装 (install) - 依赖: run (调试通过后安装)
-install: run
+## 完整安装 (install) - 依赖: compile
+install: compile
 	@echo "📦 本地开发环境安装完成"
+	@echo "  提示: 使用 'make dev' 启动开发模式"
 	@echo "  提示: 使用 'make install-system' 进行系统级安装"
 	@echo "  提示: 使用 'make dist' 生成分发包"
 
@@ -220,11 +213,10 @@ check:
 help:
 	@echo "Claw One - 构建和部署工具"
 	@echo ""
-	@echo "📋 开发工作流 (顺序依赖: deps → compile → run → install)"
+	@echo "📋 开发工作流 (顺序依赖: deps → compile → install)"
 	@echo "  make deps        - 安装依赖 (npm + cargo)"
 	@echo "  make compile     - 编译项目 (前端 + 后端)"
-	@echo "  make run         - 调试运行"
-	@echo "  make install     - 本地安装 (依赖 run)"
+	@echo "  make install     - 本地安装 (依赖 compile)"
 	@echo ""
 	@echo "🖥️  系统级安装/卸载 (需要 root)"
 	@echo "  sudo make install-system  - 安装到 /usr/local"

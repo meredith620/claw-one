@@ -21,8 +21,8 @@ make deps
 # 2. 编译
 make compile
 
-# 3. 调试运行
-make run
+# 3. 开发模式（热重载）
+make dev
 ```
 
 访问 http://localhost:8080 进入管理界面
@@ -61,8 +61,7 @@ ssh user@target-host 'sudo bash /tmp/claw-one-0.1.0-install.sh'
 |------|------|------|
 | `make deps` | - | 安装依赖 (npm + cargo) |
 | `make compile` | deps | 编译项目 (前端 + 后端) |
-| `make run` | compile | 调试运行后端 |
-| `make install` | run | 本地开发安装 |
+| `make install` | compile | 本地开发安装 |
 
 ### 系统级操作
 
