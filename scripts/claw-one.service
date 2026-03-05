@@ -1,0 +1,20 @@
+[Unit]
+Description=Claw One - OpenClaw Configuration Guardian
+After=network.target
+
+[Service]
+Type=simple
+User=claw-one
+Group=claw-one
+WorkingDirectory=/var/lib/claw-one
+Environment="RUST_LOG=info"
+Environment="CLAW_ONE_CONFIG=/etc/claw-one/openclaw.json"
+Environment="CLAW_ONE_STATIC=/usr/local/share/claw-one"
+ExecStart=/usr/local/bin/claw-one-backend
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
