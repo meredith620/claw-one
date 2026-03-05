@@ -54,7 +54,7 @@ deps:
 compile: deps
 	@echo "🔧 编译项目..."
 	@echo "  [1/2] 编译前端..."
-	cd $(FRONTEND_DIR) && $(NPM) run build
+	cd $(FRONTEND_DIR) && $(VITE) build
 	@echo "  [2/2] 编译后端..."
 	cd $(BACKEND_DIR) && $(CARGO) build --release
 	@echo "✅ 编译完成"
