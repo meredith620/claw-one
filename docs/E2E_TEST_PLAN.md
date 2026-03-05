@@ -102,10 +102,29 @@
 ## 测试数据准备
 
 创建 `test-config/` 目录，包含：
-- `minimal.json` - 最小可用配置
-- `with-models.json` - 包含模型配置
-- `with-channels.json` - 包含渠道配置
+
+### Claw One 配置文件
+- `claw-one.toml` - Claw One 自身运行配置（位于 ~/claw-one/config/）
+  - 配置 OpenClaw 连接信息（service_name, openclaw_home, health_port）
+  - 配置 Claw One 服务参数（host, port, log_level）
+
+### OpenClaw 配置文件（被管理）
+- `minimal.json` - OpenClaw 最小可用配置（位于 {openclaw_home}/）
+- `with-models.json` - 包含模型配置的 OpenClaw 配置
+- `with-channels.json` - 包含渠道配置的 OpenClaw 配置
 - `invalid.json` - 故意错误的配置（用于测试 SafeMode）
+
+### 配置关系说明
+```
+~/claw-one/config/claw-one.toml  (Claw One 自身配置)
+    ├── openclaw_home = "~/.openclaw"
+    ├── service_name = "openclaw"
+    └── health_port = 18790
+        
+~/.openclaw/openclaw.json  (OpenClaw 被管理的配置)
+    ├── models: [...]
+    └── channels: [...]
+```
 
 ## 自动化测试方案 (可选)
 

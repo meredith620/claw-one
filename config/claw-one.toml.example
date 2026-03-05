@@ -25,7 +25,7 @@ health_port = 18790
 health_timeout = 30
 
 # OpenClaw 配置文件路径（Claw One 将管理此文件）
-# 如果为空，使用默认路径: ~/.openclaw/openclaw.json
+# 如果为空，使用 {openclaw_home}/openclaw.json
 config_path = ""
 
 # OpenClaw 配置 Git 仓库路径

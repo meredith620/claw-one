@@ -87,9 +87,12 @@ bash /tmp/claw-one-0.1.0-install.sh
 # 编辑配置
 nano ~/claw-one/config/claw-one.toml
 
-# 启动服务
-systemctl --user daemon-reload
-systemctl --user enable --now claw-one
+# 启动服务（使用 CLI）
+claw-one-backend start
+
+# 或配置开机自启后启动
+claw-one-backend enable
+claw-one-backend start
 ```
 
 ## 配置文件
@@ -258,7 +261,7 @@ systemctl --user daemon-reload
 cp -r ~/claw-one/config ~/claw-one-config.backup
 
 # 2. 停止服务
-systemctl --user stop claw-one
+claw-one-backend stop
 
 # 3. 安装新版本
 bash claw-one-new-version-install.sh
@@ -266,8 +269,8 @@ bash claw-one-new-version-install.sh
 # 4. 恢复配置（如需要）
 cp ~/claw-one-config.backup/claw-one.toml ~/claw-one/config/
 
-# 5. 重启服务
-systemctl --user start claw-one
+# 5. 启动服务
+claw-one-backend start
 
 # 6. 验证
 curl http://localhost:8080/api/health
