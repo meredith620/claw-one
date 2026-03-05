@@ -38,14 +38,39 @@ make install
 # 按照提示编辑配置文件
 nano ~/claw-one/config/claw-one.toml
 
-# 启用开机自启并启动服务
-systemctl --user daemon-reload
-systemctl --user enable claw-one
-systemctl --user start claw-one
+# 使用 CLI 启动/停止/查看状态
+claw-one-backend start      # 后台启动
+claw-one-backend status     # 查看状态
+claw-one-backend stop       # 停止服务
 
-# 查看状态
-systemctl --user status claw-one
+# 配置开机自启
+claw-one-backend enable     # 配置开机自启（systemd user）
+claw-one-backend disable    # 取消开机自启
 ```
+
+### CLI 命令说明
+
+安装后，`claw-one-backend` 支持以下命令：
+
+```bash
+# 服务管理
+claw-one-backend run           # 前台运行（默认）
+claw-one-backend start         # 后台启动（优先使用 systemd）
+claw-one-backend start -d      # 后台启动（守护进程模式）
+claw-one-backend stop          # 停止服务
+claw-one-backend restart       # 重启服务
+claw-one-backend status        # 查看运行状态
+
+# 开机自启管理
+claw-one-backend enable        # 配置开机自启
+claw-one-backend disable       # 取消开机自启
+
+# 配置查看
+claw-one-backend config        # 显示当前配置
+claw-one-backend -c /path/to/config.toml run  # 指定配置文件
+```
+
+### 分发包安装
 
 ### 分发包安装
 
