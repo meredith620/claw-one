@@ -4,23 +4,29 @@
 
 set -e
 
-# 提取并执行安装
 SELF="$0"
 TARGET_DIR=$(mktemp -d)
 
-echo "Claw One 自解压安装程序"
+echo "========================================"
+echo "  Claw One 自解压安装程序"
+echo "========================================"
 echo ""
+
+# 默认安装到 ~/claw-one
+INSTALL_DIR="${INSTALL_DIR:-$HOME/claw-one}"
 
 # 解压 payload
 echo "正在解压..."
-tail -n +$(awk '/^#__PAYLOAD_BELOW__/ {print NR + 1; exit 0; }' "$SELF") "$SELF" | tar -xzf - -C "$TARGET_DIR"
+tail -n +20 "$SELF" | tar -xzf - -C "$TARGET_DIR"
 
 # 执行安装
 cd "$TARGET_DIR"
 if [ -f "install/install.sh" ]; then
-    sudo bash install/install.sh "$@"
+    export INSTALL_DIR
+    bash install/install.sh
 else
     echo "错误: 安装脚本不存在"
+    rm -rf "$TARGET_DIR"
     exit 1
 fi
 
@@ -29,4 +35,6 @@ rm -rf "$TARGET_DIR"
 
 exit 0
 
-#__PAYLOAD_BELOW__
+# ========================================
+# 以下二进制数据为 tar.gz 归档
+# ========================================

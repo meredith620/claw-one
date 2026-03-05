@@ -1,0 +1,19 @@
+[Unit]
+Description=Claw One - OpenClaw Configuration Guardian
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={INSTALL_DIR}
+Environment="RUST_LOG=info"
+Environment="CLAW_ONE_CONFIG={INSTALL_DIR}/config/claw-one.toml"
+Environment="CLAW_ONE_STATIC={INSTALL_DIR}/share/static"
+Environment="HOME={HOME}"
+ExecStart={INSTALL_DIR}/bin/claw-one-backend
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

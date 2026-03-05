@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 use crate::error::{AppError, Result};
+use crate::settings::OpenClawConfig;
 
 /// OpenClaw 服务状态
 #[derive(Debug, Clone, PartialEq)]
@@ -28,13 +29,23 @@ pub enum ServiceStatus {
 pub struct RuntimeManager {
     /// systemd 服务名称
     service_name: String,
-    /// 健康检查端口（默认 18790）
+    /// 健康检查端口
     health_port: u16,
-    /// 健康检查超时时间（默认 30 秒）
+    /// 健康检查超时时间
     health_timeout: Duration,
 }
 
 impl RuntimeManager {
+    /// 从配置创建 RuntimeManager
+    pub fn from_config(config: &OpenClawConfig) -> Self {
+        Self {
+            service_name: config.service_name.clone(),
+            health_port: config.health_port,
+            health_timeout: Duration::from_secs(config.health_timeout),
+        }
+    }
+
+    /// 使用默认配置创建（向后兼容）
     pub fn new() -> Self {
         Self {
             service_name: "openclaw".to_string(),

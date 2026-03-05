@@ -7,8 +7,9 @@ OpenClaw 配置守护程序 - 开箱即用的配置管理解决方案
 - 🛡️ **配置版本控制** - 基于 Git 的配置历史管理
 - 🔄 **安全模式** - 配置错误自动回滚，永不锁死
 - 🖥️ **Web 管理界面** - 现代化的 Vue 3 前端
-- 📦 **一键部署** - 支持 systemd 服务管理
-- 🚀 **首次启动向导** - 零配置开箱即用
+- 📦 **用户级安装** - 无需 root，安装到 ~/claw-one
+- 🚀 **systemd 用户服务** - 当前用户开机自启动
+- 📝 **灵活配置** - 通过 TOML 配置管理任意 OpenClaw 实例
 
 ## 快速开始
 
@@ -18,26 +19,32 @@ OpenClaw 配置守护程序 - 开箱即用的配置管理解决方案
 # 1. 安装依赖
 make deps
 
-# 2. 编译
-make compile
+# 2. 创建开发配置
+cp config/claw-one.toml.example backend/config.dev.toml
+# 编辑 backend/config.dev.toml 设置你的 OpenClaw 连接信息
 
-# 3. 开发模式（热重载）
+# 3. 启动开发模式
 make dev
 ```
 
 访问 http://localhost:8080 进入管理界面
 
-### 系统安装
+### 用户级安装（推荐）
 
 ```bash
-# 完整构建
-make compile
+# 编译并安装到 ~/claw-one
+make install
 
-# 系统级安装 (需要 root)
-sudo make install-system
+# 按照提示编辑配置文件
+nano ~/claw-one/config/claw-one.toml
 
-# 启动服务
-sudo systemctl enable --now claw-one
+# 启用开机自启并启动服务
+systemctl --user daemon-reload
+systemctl --user enable claw-one
+systemctl --user start claw-one
+
+# 查看状态
+systemctl --user status claw-one
 ```
 
 ### 分发包安装
@@ -50,47 +57,83 @@ make dist
 scp claw-one-0.1.0-install.sh user@target-host:/tmp/
 
 # 在目标机器上执行安装
-ssh user@target-host 'sudo bash /tmp/claw-one-0.1.0-install.sh'
+bash /tmp/claw-one-0.1.0-install.sh
+
+# 编辑配置
+nano ~/claw-one/config/claw-one.toml
+
+# 启动服务
+systemctl --user daemon-reload
+systemctl --user enable --now claw-one
+```
+
+## 配置文件
+
+Claw One 使用 TOML 格式的配置文件，默认路径：`~/claw-one/config/claw-one.toml`
+
+```toml
+[server]
+host = "0.0.0.0"
+port = 8080
+log_level = "info"
+
+[openclaw]
+service_name = "openclaw"      # 要管理的 OpenClaw 服务名
+health_port = 18790            # OpenClaw 健康检查端口
+health_timeout = 30            # 健康检查超时（秒）
+config_path = ""               # OpenClaw 配置文件路径（默认：~/.openclaw/openclaw.json）
+
+[paths]
+data_dir = "~/.config/claw-one"  # Claw One 数据目录
+
+[features]
+auto_backup = true
+safe_mode = true
+first_run_wizard = true
+```
+
+### 多实例管理
+
+通过配置不同的 `service_name` 和 `config_path`，可以管理多个 OpenClaw 实例：
+
+```toml
+# 管理测试环境的 OpenClaw
+[openclaw]
+service_name = "openclaw-test"
+config_path = "~/.openclaw-test/openclaw.json"
+health_port = 18791
 ```
 
 ## Makefile 功能说明
 
-### 开发工作流 (顺序依赖)
+### 开发工作流
 
-| 命令 | 依赖 | 功能 |
-|------|------|------|
-| `make deps` | - | 安装依赖 (npm + cargo) |
-| `make compile` | deps | 编译项目 (前端 + 后端) |
-| `make install` | compile | 本地开发安装 |
+| 命令 | 说明 |
+|------|------|
+| `make deps` | 安装依赖 (npm + cargo) |
+| `make compile` | 编译项目 (前端 + 后端) |
+| `make install` | 安装到 ~/claw-one（用户级）|
+| `make uninstall` | 从 ~/claw-one 卸载 |
 
-### 系统级操作
+### 开发辅助
 
-| 命令 | 权限 | 功能 |
-|------|------|------|
-| `sudo make install-system` | root | 安装到 `/usr/local` |
-| `sudo make uninstall` | root | 从系统卸载 |
+| 命令 | 说明 |
+|------|------|
+| `make dev` | 开发模式（需要 backend/config.dev.toml）|
+| `make check` | 代码检查 |
+| `make clean` | 清理构建产物 |
 
 ### 分发打包
 
 | 命令 | 输出 | 说明 |
 |------|------|------|
-| `make dist` | `.tar.gz` + 自解压脚本 | 通用 Linux 分发 |
-| `make deb` | `.deb` 包 | Debian/Ubuntu 专用 |
+| `make dist` | `.tar.gz` + 自解压脚本 | 默认安装到 ~/claw-one |
 
-### 开发辅助
-
-| 命令 | 功能 |
-|------|------|
-| `make dev` | 开发模式 (热重载) |
-| `make test` | 运行测试 |
-| `make check` | 代码检查 |
-| `make clean` | 清理构建产物 |
-
-### 变量配置
+### 变量
 
 ```bash
 # 自定义安装路径
-sudo make install-system PREFIX=/opt/claw-one
+make install INSTALL_DIR=~/my-claw-one
 
 # 自定义版本号打包
 make dist VERSION=1.0.0
@@ -99,152 +142,79 @@ make dist VERSION=1.0.0
 ## 项目结构
 
 ```
-claw-one/
-├── backend/           # Rust 后端 (Axum)
-│   └── src/
-├── frontend/          # Vue 3 前端
-│   └── src/
-├── static/            # 构建产物目录
-│   └── dist/
-├── scripts/           # 安装脚本和服务配置
-│   ├── install.sh
-│   ├── uninstall.sh
-│   └── claw-one.service
-├── config/            # 配置模板
-├── Makefile           # 构建脚本
-└── README.md
+~/claw-one/              # 安装目录
+├── bin/
+│   └── claw-one-backend # 后端二进制
+├── share/
+│   └── static/          # 前端静态文件
+├── config/
+│   └── claw-one.toml    # 配置文件
+└── ...
+
+~/.config/claw-one/      # 数据目录
+├── config.git/          # Git 仓库
+├── factory-config.json  # 出厂配置备份
+└── ...
 ```
 
-## 配置说明
+## systemd 用户服务
 
-### 环境变量
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `CLAW_ONE_CONFIG` | `/etc/claw-one/openclaw.json` | 主配置文件路径 |
-| `CLAW_ONE_STATIC` | `/usr/local/share/claw-one` | 静态文件路径 |
-| `RUST_LOG` | `info` | 日志级别 |
-
-### 数据目录
-
-- **系统配置**: `/etc/claw-one/`
-- **用户数据**: `~/.config/claw-one/`
-- **Git 仓库**: `~/.config/claw-one/config.git/`
-
-## 部署架构
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   目标机器 (N100)                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────┐  │
-│  │ systemd      │  │ claw-one     │  │ openclaw │  │
-│  │  service     │──│  backend     │──│  gateway │  │
-│  └──────────────┘  └──────────────┘  └──────────┘  │
-│                           │                         │
-│                      ┌────┴────┐                    │
-│                      │  Vue 3  │                    │
-│                      │   UI    │                    │
-│                      └─────────┘                    │
-└─────────────────────────────────────────────────────┘
-```
-
-## 分发安装方案
-
-本项目支持多种分发安装方式：
-
-### 方案 1: 自解压脚本 (推荐)
-
-适用于通用 Linux 环境，无需依赖管理器。
+Claw One 使用 systemd **用户服务**模式，无需 root 权限即可管理开机自启：
 
 ```bash
-# 编译机器
-make dist
-# 输出: claw-one-0.1.0-install.sh
+# 查看服务状态
+systemctl --user status claw-one
 
-# 目标机器
-sudo bash claw-one-0.1.0-install.sh
+# 启动/停止/重启
+systemctl --user start claw-one
+systemctl --user stop claw-one
+systemctl --user restart claw-one
+
+# 设置/取消开机自启
+systemctl --user enable claw-one
+systemctl --user disable claw-one
+
+# 查看日志
+journalctl --user -u claw-one -f
 ```
 
-**优点**: 单文件、无依赖、可离线安装  
-**缺点**: 无版本管理、需手动更新
+## 与 OpenClaw 的关系
 
-### 方案 2: DEB/RPM 包
-
-适用于 Debian/Ubuntu 或 RHEL/CentOS。
-
-```bash
-# Debian/Ubuntu
-make deb
-sudo dpkg -i claw-one-0.1.0.deb
-
-# 更新
-sudo dpkg -i claw-one-0.2.0.deb
 ```
-
-**优点**: 系统集成、依赖自动处理、版本管理  
-**缺点**: 平台特定、构建复杂
-
-### 方案 3: Docker 镜像
-
-适用于容器化部署。
-
-```bash
-# 构建镜像
-docker build -t claw-one:latest .
-
-# 运行
-docker run -d \
-  -v /etc/claw-one:/etc/claw-one \
-  -v ~/.config/claw-one:/var/lib/claw-one \
-  -p 8080:8080 \
-  claw-one:latest
+┌─────────────────────────────────────────────┐
+│                 用户空间                      │
+│  ┌──────────┐      ┌─────────────────────┐  │
+│  │ Claw One │──────│   OpenClaw Service  │  │
+│  │  (8080)  │管理  │     (systemd)       │  │
+│  └──────────┘      └─────────────────────┘  │
+│        │                    │               │
+│        │ 读写配置     ┌─────┴─────┐         │
+│        ▼              ▼           ▼         │
+│  ┌──────────┐    ┌────────┐  ┌────────┐    │
+│  │  Git仓库  │    │ 模型API │  │ 渠道   │    │
+│  └──────────┘    └────────┘  └────────┘    │
+└─────────────────────────────────────────────┘
 ```
-
-**优点**: 环境隔离、易于扩展、跨平台  
-**缺点**: 需要 Docker、资源占用
-
-### 方案 4: 静态二进制 + 配置管理工具
-
-适用于大规模部署（Ansible/Puppet/Chef）。
-
-```yaml
-# playbook.yml
-- hosts: openclaw_servers
-  tasks:
-    - name: Install Claw One
-      ansible.builtin.shell: |
-        curl -fsSL https://releases.claw.one/install.sh | sudo bash
-```
-
-**优点**: 自动化、可扩展、集中管理  
-**缺点**: 需要配置管理基础设施
-
-### 推荐方案
-
-| 场景 | 推荐方案 |
-|------|---------|
-| 单机/边缘设备 (N100) | 自解压脚本 |
-| 小规模集群 (<10台) | DEB 包 + 脚本 |
-| 大规模部署 (>10台) | Ansible + 静态二进制 |
-| 云原生环境 | Docker |
 
 ## 升级流程
 
 ```bash
 # 1. 备份配置
-cp -r ~/.config/claw-one ~/.config/claw-one.backup
+cp -r ~/claw-one/config ~/claw-one-config.backup
 
 # 2. 停止服务
-sudo systemctl stop claw-one
+systemctl --user stop claw-one
 
 # 3. 安装新版本
-sudo bash claw-one-new-version-install.sh
+bash claw-one-new-version-install.sh
 
-# 4. 重启服务
-sudo systemctl start claw-one
+# 4. 恢复配置（如需要）
+cp ~/claw-one-config.backup/claw-one.toml ~/claw-one/config/
 
-# 5. 验证
-systemctl status claw-one
+# 5. 重启服务
+systemctl --user start claw-one
+
+# 6. 验证
 curl http://localhost:8080/api/health
 ```
 

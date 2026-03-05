@@ -8,6 +8,7 @@ use crate::{
     config::ConfigManager,
     error::{AppError, Result},
     runtime::{ErrorType, RuntimeManager, ServiceStatus},
+    settings::OpenClawConfig,
     types::{OpenClawState, StateResponse},
 };
 
@@ -47,11 +48,11 @@ pub struct StateManager {
 }
 
 impl StateManager {
-    pub fn new(config_manager: Arc<ConfigManager>) -> Self {
+    pub fn new(config_manager: Arc<ConfigManager>, openclaw_config: &OpenClawConfig) -> Self {
         Self {
             state: Arc::new(RwLock::new(AppState::Normal)),
             config_manager,
-            runtime_manager: RuntimeManager::new(),
+            runtime_manager: RuntimeManager::from_config(openclaw_config),
         }
     }
 

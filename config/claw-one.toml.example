@@ -1,0 +1,47 @@
+# Claw One 后端配置文件
+# 用于配置 Claw One 自身运行参数和管理的 OpenClaw 连接信息
+
+[server]
+# Claw One 服务监听地址
+host = "0.0.0.0"
+port = 8080
+# 日志级别: trace, debug, info, warn, error
+log_level = "info"
+
+[openclaw]
+# 要管理的 OpenClaw 服务配置
+
+# OpenClaw 服务名称（用于 systemctl 命令）
+service_name = "openclaw"
+
+# OpenClaw 健康检查端口
+health_port = 18790
+
+# OpenClaw 健康检查超时（秒）
+health_timeout = 30
+
+# OpenClaw 配置文件路径（Claw One 将管理此文件）
+# 如果为空，使用默认路径: ~/.openclaw/openclaw.json
+config_path = ""
+
+# OpenClaw 配置 Git 仓库路径
+# 如果为空，使用 config_path 的父目录
+git_repo_path = ""
+
+[paths]
+# Claw One 自身数据目录（Git 仓库、快照等）
+data_dir = "~/.config/claw-one"
+
+# 静态文件目录（前端构建产物）
+# 如果为空，使用相对路径: ../static/dist
+static_dir = ""
+
+[features]
+# 是否启用自动备份
+auto_backup = true
+
+# 是否启用安全模式（配置错误时自动回滚）
+safe_mode = true
+
+# 首次启动是否显示向导
+first_run_wizard = true
