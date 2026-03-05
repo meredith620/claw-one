@@ -11,7 +11,11 @@ log_level = "info"
 [openclaw]
 # 要管理的 OpenClaw 服务配置
 
-# OpenClaw 服务名称（用于 systemctl 命令）
+# OpenClaw 安装根目录（包含 openclaw.json 配置文件）
+# 默认为 ~/.openclaw，配置文件路径为 {openclaw_home}/openclaw.json
+openclaw_home = "~/.openclaw"
+
+# OpenClaw 服务名称（用于 systemctl --user 命令）
 service_name = "openclaw"
 
 # OpenClaw 健康检查端口

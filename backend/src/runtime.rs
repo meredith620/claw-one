@@ -81,10 +81,11 @@ impl RuntimeManager {
         self.systemctl("restart").await
     }
 
-    /// 获取服务状态
+    /// 获取服务状态（使用 systemctl --user）
     pub async fn status(&self) -> Result<ServiceStatus> {
         let output = Command::new("systemctl")
             .args([
+                "--user",
                 "is-active",
                 &format!("{}.service", self.service_name),
             ])
@@ -147,10 +148,11 @@ impl RuntimeManager {
         }
     }
 
-    /// 获取服务日志（最近 n 行）
+    /// 获取服务日志（最近 n 行）- 使用 journalctl --user
     pub async fn get_logs(&self, lines: usize) -> Result<String> {
         let output = Command::new("journalctl")
             .args([
+                "--user",
                 "-u",
                 &format!("{}.service", self.service_name),
                 "-n",
@@ -206,11 +208,12 @@ impl RuntimeManager {
         None
     }
 
-    // 私有辅助方法
+    // 私有辅助方法 - 使用 systemctl --user
 
     async fn systemctl(&self, action: &str) -> Result<()> {
         let output = Command::new("systemctl")
             .args([
+                "--user",
                 action,
                 &format!("{}.service", self.service_name),
             ])
@@ -220,7 +223,7 @@ impl RuntimeManager {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(AppError::Runtime(format!(
-                "systemctl {} failed: {}",
+                "systemctl --user {} failed: {}",
                 action, stderr
             )));
         }
@@ -279,6 +282,7 @@ impl RuntimeManager {
     async fn get_failure_reason(&self) -> Result<String> {
         let output = Command::new("systemctl")
             .args([
+                "--user",
                 "status",
                 &format!("{}.service", self.service_name),
                 "--no-pager",

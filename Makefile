@@ -199,6 +199,11 @@ check:
 	cd $(BACKEND_DIR) && $(CARGO) clippy 2>/dev/null || echo "⚠️ clippy 未安装"
 	cd $(FRONTEND_DIR) && $(NPM) run lint 2>/dev/null || echo "⚠️ lint 未配置"
 
+## 检测安装环境
+check-env:
+	@echo "🔍 检测安装环境..."
+	@bash scripts/install.sh check
+
 # ============================================
 # 帮助信息
 # ============================================

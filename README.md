@@ -78,10 +78,10 @@ port = 8080
 log_level = "info"
 
 [openclaw]
-service_name = "openclaw"      # 要管理的 OpenClaw 服务名
-health_port = 18790            # OpenClaw 健康检查端口
-health_timeout = 30            # 健康检查超时（秒）
-config_path = ""               # OpenClaw 配置文件路径（默认：~/.openclaw/openclaw.json）
+openclaw_home = "~/.openclaw"   # OpenClaw 安装根目录
+service_name = "openclaw"       # 要管理的 OpenClaw 服务名
+health_port = 18790             # OpenClaw 健康检查端口
+health_timeout = 30             # 健康检查超时（秒）
 
 [paths]
 data_dir = "~/.config/claw-one"  # Claw One 数据目录
@@ -92,17 +92,30 @@ safe_mode = true
 first_run_wizard = true
 ```
 
+配置项说明：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `openclaw_home` | OpenClaw 安装根目录，配置文件为 `{openclaw_home}/openclaw.json` | `~/.openclaw` |
+| `service_name` | OpenClaw systemd 用户服务名称 | `openclaw` |
+| `health_port` | OpenClaw 健康检查端口 | `18790` |
+| `config_path` | 覆盖 `openclaw_home` 的配置文件路径（高级） | `""` |
+
 ### 多实例管理
 
-通过配置不同的 `service_name` 和 `config_path`，可以管理多个 OpenClaw 实例：
+通过配置不同的 `openclaw_home` 和 `service_name`，可以管理多个 OpenClaw 实例：
 
 ```toml
 # 管理测试环境的 OpenClaw
 [openclaw]
+openclaw_home = "~/.openclaw-test"
 service_name = "openclaw-test"
-config_path = "~/.openclaw-test/openclaw.json"
 health_port = 18791
 ```
+
+上述配置将：
+- 管理 `~/.openclaw-test/openclaw.json` 配置文件
+- 控制 `systemctl --user openclaw-test` 服务
 
 ## Makefile 功能说明
 
@@ -121,7 +134,19 @@ health_port = 18791
 |------|------|
 | `make dev` | 开发模式（需要 backend/config.dev.toml）|
 | `make check` | 代码检查 |
+| `make check-env` | 检测安装环境依赖 |
 | `make clean` | 清理构建产物 |
+
+### 分发包安装脚本
+
+分发包中的 `install.sh` 支持以下命令：
+
+```bash
+./install.sh check       # 检测环境依赖（git、systemd 等）
+./install.sh install     # 安装（默认）
+./install.sh uninstall   # 卸载
+./install.sh help        # 显示帮助
+```
 
 ### 分发打包
 
@@ -159,13 +184,13 @@ make dist VERSION=1.0.0
 
 ## systemd 用户服务
 
-Claw One 使用 systemd **用户服务**模式，无需 root 权限即可管理开机自启：
+Claw One 使用 systemd **用户服务**模式（`systemctl --user`），无需 root 权限即可管理开机自启：
 
 ```bash
 # 查看服务状态
 systemctl --user status claw-one
 
-# 启动/停止/重启
+# 启动/停止/重启（使用 --user 标志）
 systemctl --user start claw-one
 systemctl --user stop claw-one
 systemctl --user restart claw-one
@@ -176,7 +201,12 @@ systemctl --user disable claw-one
 
 # 查看日志
 journalctl --user -u claw-one -f
+
+# 重新加载 systemd 配置（安装/更新后需要）
+systemctl --user daemon-reload
 ```
+
+**注意**：Claw One 控制 OpenClaw 也使用 `systemctl --user` 命令，确保 OpenClaw 同样以用户服务运行。
 
 ## 与 OpenClaw 的关系
 

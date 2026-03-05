@@ -36,6 +36,9 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OpenClawConfig {
+    /// OpenClaw 安装根目录（包含 openclaw.json 配置文件）
+    #[serde(default = "default_openclaw_home")]
+    pub openclaw_home: String,
     /// OpenClaw 服务名称（用于 systemctl）
     #[serde(default = "default_service_name")]
     pub service_name: String,
@@ -45,7 +48,7 @@ pub struct OpenClawConfig {
     /// 健康检查超时（秒）
     #[serde(default = "default_health_timeout")]
     pub health_timeout: u64,
-    /// OpenClaw 配置文件路径
+    /// OpenClaw 配置文件路径（覆盖 openclaw_home 的默认）
     #[serde(default)]
     pub config_path: String,
     /// Git 仓库路径
@@ -80,6 +83,7 @@ pub struct FeaturesConfig {
 fn default_host() -> String { "0.0.0.0".to_string() }
 fn default_port() -> u16 { 8080 }
 fn default_log_level() -> String { "info".to_string() }
+fn default_openclaw_home() -> String { "~/.openclaw".to_string() }
 fn default_service_name() -> String { "openclaw".to_string() }
 fn default_health_port() -> u16 { 18790 }
 fn default_health_timeout() -> u64 { 30 }
@@ -99,6 +103,7 @@ impl Default for ServerConfig {
 impl Default for OpenClawConfig {
     fn default() -> Self {
         Self {
+            openclaw_home: default_openclaw_home(),
             service_name: default_service_name(),
             health_port: default_health_port(),
             health_timeout: default_health_timeout(),
@@ -182,14 +187,18 @@ impl Settings {
         }
     }
 
+    /// 获取 OpenClaw 安装根目录
+    pub fn openclaw_home(&self) -> PathBuf {
+        expand_path(&self.openclaw.openclaw_home)
+    }
+
     /// 获取 OpenClaw 配置文件路径
+    /// 优先级: config_path > openclaw_home/openclaw.json
     pub fn openclaw_config_path(&self) -> PathBuf {
-        if self.openclaw.config_path.is_empty() {
-            dirs::home_dir()
-                .map(|h| h.join(".openclaw").join("openclaw.json"))
-                .unwrap_or_else(|| PathBuf::from("~/.openclaw/openclaw.json"))
-        } else {
+        if !self.openclaw.config_path.is_empty() {
             expand_path(&self.openclaw.config_path)
+        } else {
+            self.openclaw_home().join("openclaw.json")
         }
     }
 
@@ -221,12 +230,13 @@ fn expand_path(path: &str) -> PathBuf {
 pub fn check_config_or_exit() {
     match Settings::from_env() {
         Ok(settings) => {
-            // 检查是否是默认配置（可能没有正确配置 OpenClaw）
+            // 检查是否是默认配置
             if settings.openclaw.service_name == "openclaw" 
-                && settings.openclaw.config_path.is_empty() {
-                println!("⚠️  警告: 您似乎在使用默认配置");
-                println!("   请确保编辑配置文件设置正确的 OpenClaw 连接信息");
-                println!("   配置文件路径: {:?}", std::env::var("CLAW_ONE_CONFIG").unwrap_or_default());
+                && settings.openclaw.openclaw_home == default_openclaw_home() {
+                println!("⚠️  警告: 您正在使用默认配置");
+                println!("   OpenClaw 根目录: {}", settings.openclaw_home().display());
+                println!("   配置文件路径: {}", settings.openclaw_config_path().display());
+                println!("   如需修改，请编辑配置文件设置正确的 OpenClaw 连接信息");
             }
         }
         Err(e) => {
