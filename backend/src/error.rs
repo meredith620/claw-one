@@ -19,6 +19,12 @@ pub enum AppError {
     #[error("Config not found")]
     ConfigNotFound,
     
+    #[error("Not found: {0}")]
+    NotFound(String),
+    
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+    
     #[error("Runtime error: {0}")]
     Runtime(String),
     
@@ -33,6 +39,8 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             AppError::ConfigNotFound => (StatusCode::NOT_FOUND, self.to_string()),
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Runtime(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Git(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.clone()),
             _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),

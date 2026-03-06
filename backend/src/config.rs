@@ -388,6 +388,100 @@ impl ConfigManager {
         
         Ok(!output.stdout.is_empty())
     }
+
+    // ==================== 模块级配置方法 ====================
+
+    /// 获取 Provider 模块配置
+    pub async fn get_providers(&self,
+    ) -> Result<Vec<serde_json::Value>> {
+        let config = self.get_config().await?;
+        
+        let providers = config
+            .get("models")
+            .and_then(|m| m.get("providers"))
+            .and_then(|p| p.as_object())
+            .map(|obj| {
+                obj.iter()
+                    .map(|(id, value)| {
+                        let version = if id.starts_with("moonshot-") {
+                            value.get("baseUrl")
+                                .and_then(|u| u.as_str())
+                                .map(|url| {
+                                    if url.contains("kimi.com") {
+                                        "coding"
+                                    } else if url.contains("moonshot.cn") {
+                                        "cn"
+                                    } else {
+                                        "ai"
+                                    }
+                                })
+                                .map(|s| s.to_string())
+                        } else {
+                            None
+                        };
+
+                        serde_json::json!({
+                            "id": id,
+                            "version": version,
+                            "enabled": value.get("enabled")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(true),
+                            "apiKey": value.get("apiKey"),
+                            "baseUrl": value.get("baseUrl"),
+                            "defaultModel": value.get("models")
+                                .and_then(|m| m.as_array())
+                                .and_then(|arr| arr.first())
+                                .and_then(|m| m.get("id")),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        
+        Ok(providers)
+    }
+
+    /// 保存 Provider 实例
+    pub async fn save_provider(
+        &self,
+        provider_id: &str,
+        data: &serde_json::Value,
+    ) -> Result<()> {
+        let mut config = self.get_config().await?;
+        
+        // 确保 models.providers 路径存在
+        if config.get("models").is_none() {
+            config["models"] = serde_json::json!({});
+        }
+        if config["models"].get("providers").is_none() {
+            config["models"]["providers"] = serde_json::json!({});
+        }
+        
+        // 更新指定 provider，保留其他
+        config["models"]["providers"][provider_id] = data.clone();
+        
+        self.save_config(&config).await?;
+        Ok(())
+    }
+
+    /// 删除 Provider 实例
+    pub async fn delete_provider(
+        &self,
+        provider_id: &str,
+    ) -> Result<()> {
+        let mut config = self.get_config().await?;
+        
+        if let Some(providers) = config
+            .get_mut("models")
+            .and_then(|m| m.get_mut("providers"))
+            .and_then(|p| p.as_object_mut())
+        {
+            providers.remove(provider_id);
+        }
+        
+        self.save_config(&config).await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

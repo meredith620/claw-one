@@ -26,6 +26,16 @@ export const getConfig = () => api.get<Config>('/config')
 export const applyConfig = (data: ApplyConfigRequest) =>
   api.post<ApplyConfigResponse>('/config', data)
 
+// Provider 配置
+export const getProviders = () => api.get<any[]>('/providers')
+export const getProvider = (id: string) => api.get<any>(`/providers/${id}`)
+export const saveProvider = (id: string, data: any) => api.post(`/providers/${id}`, data)
+export const deleteProvider = (id: string) => api.delete(`/providers/${id}`)
+
+// 模型优先级
+export const getModelPriority = () => api.get('/model-priority')
+export const saveModelPriority = (data: { primary: string; fallbacks: string[] }) => api.post('/model-priority', data)
+
 // 快照
 export const getSnapshots = () => api.get<SnapshotsResponse>('/snapshots')
 
