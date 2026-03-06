@@ -1,6 +1,6 @@
 # Claw One 可视化配置设计文档
 
-**版本**: v2.1  
+**版本**: v2.2  
 **日期**: 2026-03-06  
 **状态**: ✅ 设计确认完成，进入实现阶段
 
@@ -28,6 +28,9 @@
 
 | 问题 | 决策 |
 |------|------|
+| **模块范围** | 只保留 Provider、Agent、Memory、Channel **4个核心模块** |
+| **布局方案** | **两栏布局**（左侧导航 + 右侧内容） |
+| **导入/导出** | ❌ **不需要** |
 | **Agent 工作区创建** | 自动提供建议值，用户不修改就用建议值 |
 | **模型列表** | 固定列表 + 支持自定义输入 |
 | **Memory Provider** | 先 Ollama，后期可扩展 |
@@ -35,19 +38,21 @@
 | **API Key 验证** | 保存时验证有效性 |
 | **版本管理** | 以 openclaw.json 整体做 Git 版本管理 |
 | **默认模型设置** | Provider 设置时可设为默认模型 |
-| **内置 Provider** | Moonshot AI, OpenAI, Anthropic, Custom |
+| **内置 Provider** | Moonshot、OpenAI、Anthropic、Custom |
+| **内置 Provider API 格式** | **固定格式，不需要用户选择** |
+| **Custom Provider API 格式** | **用户选择**（openai-completions/responses/anthropic-messages） |
 | **表单渲染** | 轻量动态生成，基于 Schema 而非硬编码 |
 
 ---
 
 ## 3. 内置 Provider 列表
 
-| Provider | 阶段 | 说明 |
-|----------|------|------|
-| **Moonshot AI** | Phase 1 | 优先实现，验证可行性 |
-| **OpenAI** | Phase 2 | 标准 OpenAI API 格式 |
-| **Anthropic** | Phase 2 | Claude 系列模型 |
-| **Custom** | Phase 3 | 通用 OpenAI-compatible 接口 |
+| 内置 Provider | 阶段 | 固定 API 格式 | 说明 |
+|--------------|------|--------------|------|
+| **Moonshot AI** | Phase 1 | `openai-completions` | 优先实现，验证可行性 |
+| **OpenAI** | Phase 2 | `openai-completions` 或 `openai-responses` | OpenAI 支持两种 API 格式 |
+| **Anthropic** | Phase 2 | `anthropic-messages` | Claude 系列模型 |
+| **Custom** | Phase 3 | 用户选择 | 支持 `openai-completions` / `openai-responses` / `anthropic-messages` |
 
 ---
 
@@ -202,12 +207,84 @@ const componentMap: Record<string, Component> = {
 
 ### 6.2 Provider / Model 配置
 
+**布局设计：两栏布局**
+
+采用**左侧 Provider 列表 + 右侧配置详情**的两栏布局：
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Claw One 配置                                 [保存] [重启]    │
+├──────────────────┬──────────────────────────────────────────────┤
+│  🧠 Provider     │  AI Provider 配置                             │
+│  🤖 Agent        │  ───────────────────────────────────────────  │
+│  🧠 Memory       │                                               │
+│  📱 Channel      │  ┌─────────────────────────────────────────┐ │
+│                  │  │ 🌙 Moonshot    [开关]  [配置▼] [删除]  │ │
+│                  │  │    状态: ✅ 已启用                       │ │
+│                  │  │    模型: kimi-k2.5                       │ │
+│                  │  └─────────────────────────────────────────┘ │
+│                  │  ┌─────────────────────────────────────────┐ │
+│                  │  │ 🤖 OpenAI      [开关]  [配置▼] [删除]  │ │
+│                  │  │    状态: ⚪ 未启用                       │ │
+│                  │  └─────────────────────────────────────────┘ │
+│                  │  ┌─────────────────────────────────────────┐ │
+│                  │  │ 🧠 Anthropic   [开关]  [配置▼] [删除]  │ │
+│                  │  │    状态: ⚪ 未启用                       │ │
+│                  │  └─────────────────────────────────────────┘ │
+│                  │                                               │
+│                  │  [+ 添加 Custom Provider]                     │
+│                  │                                               │
+└──────────────────┴──────────────────────────────────────────────┘
+```
+
+**点击展开 Provider 详情表单：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Claw One 配置                                 [保存] [重启]    │
+├──────────────────┬──────────────────────────────────────────────┤
+│  🧠 Provider     │  🌙 Moonshot 配置                             │
+│  🤖 Agent        │  ───────────────────────────────────────────  │
+│  🧠 Memory       │                                               │
+│  📱 Channel      │  基础配置                                      │
+│                  │  ───────────────────────────────────────────  │
+│                  │  启用 Provider          [✓ 开启]              │
+│                  │  API Key                [sk-***    ] [显示]   │
+│                  │  Base URL               [https://api...]      │
+│                  │                                               │
+│                  │  模型配置                                      │
+│                  │  ───────────────────────────────────────────  │
+│                  │  默认模型               [Kimi K2.5 ▼]         │
+│                  │                                               │
+│                  │  [取消]  [保存配置]                             │
+│                  │                                               │
+└──────────────────┴──────────────────────────────────────────────┘
+```
+
+**布局说明：**
+
+| 布局 | 适用性 | 决策 |
+|------|--------|------|
+| **两栏** | 模块少(4个)，内容区宽敞 | ✅ **采用** |
+| 三栏 | 模块多，需要二级导航 | 不适用 |
+
+**设计理由：**
+1. 只有 4 个核心模块，左侧导航足够简洁
+2. Provider 列表本身就是二级导航，点击后在右侧展开详情
+3. 两栏布局给表单内容区更多空间
+4. 不需要导入/导出功能，界面更简洁
+
+---
+
 **内置 Provider Schema 定义**
+
+> **注意**: 内置 Provider 使用固定 `api` 字段，**只有 Custom Provider 需要用户选择 API 格式**。
 
 ```yaml
 # Moonshot
 name: Moonshot
 type: provider
+api: openai-completions  # 固定，不需要用户选择
 fields:
   - id: enabled
     type: boolean
@@ -234,6 +311,7 @@ fields:
 # OpenAI
 name: OpenAI
 type: provider
+api: openai-completions  # 默认，可切换为 openai-responses
 fields:
   - id: enabled
     type: boolean
@@ -247,6 +325,15 @@ fields:
     type: string
     label: Base URL
     default: https://api.openai.com/v1
+  - id: apiVariant
+    type: select
+    label: API 类型
+    default: openai-completions
+    options:
+      - value: openai-completions
+        label: Completions API
+      - value: openai-responses
+        label: Responses API
   - id: defaultModel
     type: select
     label: 默认模型
@@ -262,6 +349,7 @@ fields:
 # Anthropic
 name: Anthropic
 type: provider
+api: anthropic-messages  # 固定，不需要用户选择
 fields:
   - id: enabled
     type: boolean
@@ -287,7 +375,7 @@ fields:
         label: Claude 3 Haiku
     allow_custom: true
 
-# Custom (OpenAI-compatible)
+# Custom (用户自定义 Provider)
 name: Custom
 type: provider
 fields:
@@ -299,6 +387,7 @@ fields:
     type: string
     label: Provider ID
     required: true
+    placeholder: 如 deepseek、qwen、volcengine 等
   - id: name
     type: string
     label: 显示名称
@@ -311,13 +400,23 @@ fields:
     type: string
     label: Base URL
     required: true
-  - id: apiFormat
+    placeholder: https://api.example.com/v1
+  - id: apiFormat  # <-- 只有 Custom 需要选择 API 格式
     type: select
     label: API 格式
+    required: true
     options:
-      - value: openai-compatible
-        label: OpenAI Compatible
-    default: openai-compatible
+      - value: openai-completions
+        label: OpenAI Completions (兼容 OpenAI 格式)
+      - value: openai-responses
+        label: OpenAI Responses (OpenAI Responses API)
+      - value: anthropic-messages
+        label: Anthropic Messages (兼容 Claude 格式)
+  - id: defaultModel
+    type: string
+    label: 默认模型
+    required: true
+    placeholder: 输入模型 ID，如 deepseek-chat
 ```
 
 ### 6.3 Multi-Agent 配置
