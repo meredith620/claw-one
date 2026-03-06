@@ -1,6 +1,6 @@
 # Claw One 可视化配置设计文档
 
-**版本**: v2.2  
+**版本**: v2.3  
 **日期**: 2026-03-06  
 **状态**: ✅ 设计确认完成，进入实现阶段
 
@@ -38,21 +38,22 @@
 | **API Key 验证** | 保存时验证有效性 |
 | **版本管理** | 以 openclaw.json 整体做 Git 版本管理 |
 | **默认模型设置** | Provider 设置时可设为默认模型 |
-| **内置 Provider** | Moonshot、OpenAI、Anthropic、Custom |
-| **内置 Provider API 格式** | **固定格式，不需要用户选择** |
-| **Custom Provider API 格式** | **用户选择**（openai-completions/responses/anthropic-messages） |
+| **内置 Provider** | Moonshot、OpenAI、Anthropic、MiniMax、Custom |
+| **Provider 多实例** | ✅ 支持，每个类型可创建多个不同 API Key 的实例 |
+| **实例 ID 规则** | `{type}-{name}`，如 `moonshot-work` |
 | **表单渲染** | 轻量动态生成，基于 Schema 而非硬编码 |
 
 ---
 
 ## 3. 内置 Provider 列表
 
-| 内置 Provider | 阶段 | 固定 API 格式 | 说明 |
-|--------------|------|--------------|------|
-| **Moonshot AI** | Phase 1 | `openai-completions` | 优先实现，验证可行性 |
-| **OpenAI** | Phase 2 | `openai-completions` 或 `openai-responses` | OpenAI 支持两种 API 格式 |
-| **Anthropic** | Phase 2 | `anthropic-messages` | Claude 系列模型 |
-| **Custom** | Phase 3 | 用户选择 | 支持 `openai-completions` / `openai-responses` / `anthropic-messages` |
+| 内置 Provider | 阶段 | 说明 |
+|--------------|------|------|
+| **Moonshot** | Phase 1 | 含3个子选项：Kimi Coding(默认)/.ai/.cn |
+| **OpenAI** | Phase 1 | API Key 认证 |
+| **Anthropic** | Phase 1 | API Key 认证 |
+| **MiniMax** | Phase 2 | OAuth/M2.5/M2.5(CN)/M2.5 Highspeed |
+| **Custom** | Phase 2 | 用户自定义，支持多种 API 格式 |
 
 ---
 
@@ -207,9 +208,13 @@ const componentMap: Record<string, Component> = {
 
 ### 6.2 Provider / Model 配置
 
-**布局设计：两栏布局**
+**核心设计：Provider 类型 + 多实例**
 
-采用**左侧 Provider 列表 + 右侧配置详情**的两栏布局：
+每个 Provider 类型（Moonshot/OpenAI/Anthropic/MiniMax/Custom）可以创建多个实例，每个实例有独立的 API Key 和配置。
+
+**实例 ID 生成规则**: `{type}-{name}`，如 `moonshot-work`、`openai-personal`
+
+**UI 设计：两栏布局**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -218,65 +223,100 @@ const componentMap: Record<string, Component> = {
 │  🧠 Provider     │  AI Provider 配置                             │
 │  🤖 Agent        │  ───────────────────────────────────────────  │
 │  🧠 Memory       │                                               │
-│  📱 Channel      │  ┌─────────────────────────────────────────┐ │
-│                  │  │ 🌙 Moonshot    [开关]  [配置▼] [删除]  │ │
-│                  │  │    状态: ✅ 已启用                       │ │
-│                  │  │    模型: kimi-k2.5                       │ │
-│                  │  └─────────────────────────────────────────┘ │
-│                  │  ┌─────────────────────────────────────────┐ │
-│                  │  │ 🤖 OpenAI      [开关]  [配置▼] [删除]  │ │
-│                  │  │    状态: ⚪ 未启用                       │ │
-│                  │  └─────────────────────────────────────────┘ │
-│                  │  ┌─────────────────────────────────────────┐ │
-│                  │  │ 🧠 Anthropic   [开关]  [配置▼] [删除]  │ │
-│                  │  │    状态: ⚪ 未启用                       │ │
-│                  │  └─────────────────────────────────────────┘ │
+│  📱 Channel      │  ── Moonshot ───────────────────────────────  │
+│                  │  ┌─ moonshot-work ─────────────────────────┐  │
+│                  │  │  版本: .ai  模型: kimi-k2.5              │  │
+│                  │  │  状态: ✅ 已启用            [配置] [删除]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  ┌─ moonshot-china ────────────────────────┐  │
+│                  │  │  版本: .cn  模型: kimi-k2.5              │  │
+│                  │  │  状态: ⚪ 未启用            [配置] [删除]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  [+ 添加 Moonshot 实例]                         │
 │                  │                                               │
-│                  │  [+ 添加 Custom Provider]                     │
+│                  │  ── OpenAI ─────────────────────────────────  │
+│                  │  ┌─ openai-personal ───────────────────────┐  │
+│                  │  │  模型: gpt-4o               [配置] [删除]│  │
+│                  │  │  状态: ✅ 已启用                          │  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  [+ 添加 OpenAI 实例]                           │
+│                  │                                               │
+│                  │  ── Anthropic ──────────────────────────────  │
+│                  │  [+ 添加 Anthropic 实例]                        │
+│                  │                                               │
+│                  │  ── MiniMax ────────────────────────────────  │
+│                  │  [+ 添加 MiniMax 实例]                          │
+│                  │                                               │
+│                  │  ── Custom ─────────────────────────────────  │
+│                  │  ┌─ deepseek-team ─────────────────────────┐  │
+│                  │  │  Type: deepseek  模型: deepseek-chat     │  │
+│                  │  │  状态: ✅ 已启用            [配置] [删除]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  [+ 添加 Custom Provider]                       │
+│                  │                                               │
+│                  │  ═══════════════════════════════════════════  │
+│                  │  模型优先级设置（从已启用实例中选择）            │
+│                  │  ═══════════════════════════════════════════  │
+│                  │                                               │
+│                  │  Primary:    [moonshot-work/kimi-k2.5 ▼]      │
+│                  │  Fallback 1: [openai-personal/gpt-4o ▼]       │
+│                  │  [+ 添加 Fallback]                              │
 │                  │                                               │
 └──────────────────┴──────────────────────────────────────────────┘
 ```
 
-**点击展开 Provider 详情表单：**
+**添加 Moonshot 实例：**
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Claw One 配置                                 [保存] [重启]    │
-├──────────────────┬──────────────────────────────────────────────┤
-│  🧠 Provider     │  🌙 Moonshot 配置                             │
-│  🤖 Agent        │  ───────────────────────────────────────────  │
-│  🧠 Memory       │                                               │
-│  📱 Channel      │  基础配置                                      │
-│                  │  ───────────────────────────────────────────  │
-│                  │  启用 Provider          [✓ 开启]              │
-│                  │  API Key                [sk-***    ] [显示]   │
-│                  │  Base URL               [https://api...]      │
-│                  │                                               │
-│                  │  模型配置                                      │
-│                  │  ───────────────────────────────────────────  │
-│                  │  默认模型               [Kimi K2.5 ▼]         │
-│                  │                                               │
-│                  │  [取消]  [保存配置]                             │
-│                  │                                               │
-└──────────────────┴──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  添加 Moonshot 实例                                [保存]   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  实例名称: [work                ]  → 生成: moonshot-work    │
+│                                                              │
+│  版本选择:                                                   │
+│  ● Kimi Coding (默认)                                        │
+│    Base: https://api.kimi.com/coding/  API: anthropic-msg   │
+│  ○ Kimi API (.ai)                                            │
+│    Base: https://api.moonshot.ai/v1    API: openai-comp     │
+│  ○ Kimi API (.cn)                                            │
+│    Base: https://api.moonshot.cn/v1    API: openai-comp     │
+│                                                              │
+│  API Key: [sk-***                           ]                │
+│  默认模型: [k2p5 ▼]  (根据版本动态变化)                      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**布局说明：**
+**添加 Custom Provider：**
 
-| 布局 | 适用性 | 决策 |
-|------|--------|------|
-| **两栏** | 模块少(4个)，内容区宽敞 | ✅ **采用** |
-| 三栏 | 模块多，需要二级导航 | 不适用 |
+```
+┌─────────────────────────────────────────────────────────────┐
+│  添加 Custom Provider                              [保存]   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  类型: [deepseek         ]  (可输入已有类型或新类型)          │
+│  实例名称: [team           ]                                  │
+│                                                              │
+│  生成 Provider ID: deepseek-team                             │
+│                                                              │
+│  API Key: [sk-***                           ]                │
+│  Base URL: [https://api.deepseek.com/v1     ]                │
+│  API 格式: [openai-completions ▼]                            │
+│  默认模型: [deepseek-chat ▼]  (支持自定义输入)                │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
 
-**设计理由：**
-1. 只有 4 个核心模块，左侧导航足够简洁
-2. Provider 列表本身就是二级导航，点击后在右侧展开详情
-3. 两栏布局给表单内容区更多空间
-4. 不需要导入/导出功能，界面更简洁
+**关键规则：**
 
----
-
-**内置 Provider Schema 定义**
+| 规则 | 说明 |
+|------|------|
+| 实例 ID 唯一 | 全局唯一，不能与内置 provider ID 冲突 |
+| 实例可删除 | 删除后从 openclaw.json 移除该 provider |
+| 内置类型限制 | Moonshot/OpenAI/Anthropic/MiniMax/Custom 为固定类型 |
+| Custom 类型 | 可重复创建实例，同 type 不同 name |
+| 模型优先级 | 从所有已启用实例的模型中选择，格式：`{instance-id}/{model-id}` |
 
 > **注意**: 内置 Provider 使用固定 `api` 字段，**只有 Custom Provider 需要用户选择 API 格式**。
 
@@ -422,11 +462,116 @@ fields:
     placeholder: 输入模型 ID，如 deepseek-chat
 ```
 
-### 6.3 Multi-Agent 配置
+### 6.3 Agent 配置
 
-涉及配置路径:
-- `agents.list[].{id,name,workspace,agentDir}`
-- `bindings[].{agentId,match.channel,match.accountId}`
+**设计：支持单 Agent / Multi-Agent 模式切换**
+
+| 模式 | 说明 | 配置内容 |
+|------|------|---------|
+| **单 Agent** (默认) | 使用 `agents.defaults` 配置 | 仅配置默认 Agent 参数 |
+| **Multi-Agent** | 启用 `agents.list` 多 Agent | 配置多个自定义 Agent + 默认 Agent |
+
+**UI 设计：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🤖 Agent 配置                                   [保存] [重启]  │
+├──────────────────┬──────────────────────────────────────────────┤
+│  🧠 Provider     │                                               │
+│  🤖 Agent        │  Agent 模式                                    │
+│  🧠 Memory       │  ───────────────────────────────────────────  │
+│  📱 Channel      │  ○ 单 Agent 模式 (默认)                        │
+│                  │  ● Multi-Agent 模式                            │
+│                  │                                               │
+│                  │  ═══════════════════════════════════════════  │
+│                  │  默认 Agent 配置                               │
+│                  │  ═══════════════════════════════════════════  │
+│                  │  工作区目录: [~/.openclaw/workspace    ] [浏览]│
+│                  │  Agent 目录: [~/.openclaw/agent        ] [浏览]│
+│                  │  [高级设置...]                                 │
+│                  │                                               │
+│                  │  ═══════════════════════════════════════════  │
+│                  │  自定义 Agent 列表 (仅 Multi-Agent 模式显示)    │
+│                  │  ═══════════════════════════════════════════  │
+│                  │  ┌─ architecturer ─────────────────────────┐  │
+│                  │  │  名称: 架构师助手                          │  │
+│                  │  │  工作区: ~/workspace-architecturer         │  │
+│                  │  │  专用模型: 使用默认           [配置] [删除]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  ┌─ developer ─────────────────────────────┐  │
+│                  │  │  名称: 开发助手                            │  │
+│                  │  │  工作区: ~/workspace-developer             │  │
+│                  │  │  专用模型: openai/gpt-4o      [配置] [删除]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  [+ 添加 Agent]                                 │
+│                  │                                               │
+└──────────────────┴──────────────────────────────────────────────┘
+```
+
+**添加 Agent：**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  添加 Agent                                        [保存]   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Agent ID: [developer        ]  (自动生成，唯一标识)         │
+│                                                              │
+│  显示名称: [开发助手         ]                                │
+│                                                              │
+│  工作区目录: [~/.openclaw/workspace-developer] [浏览]        │
+│  ├─ 默认生成规则: ~/.openclaw/workspace-{id}                 │
+│  └─ 用户可修改                                               │
+│                                                              │
+│  Agent 目录: [~/.openclaw/agents/developer/agent] [浏览]     │
+│  ├─ 默认生成规则: ~/.openclaw/agents/{id}/agent              │
+│  └─ 用户可修改                                               │
+│                                                              │
+│  专用模型 (可选): [使用默认 ▼]                                │
+│  ├─ 使用默认 (跟随全局模型优先级)                             │
+│  ├─ moonshot-work/kimi-k2.5                                  │
+│  ├─ openai-personal/gpt-4o                                   │
+│  └─ ... (从已启用的 Provider 实例中选择)                      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**配置映射：**
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.openclaw/workspace",
+      "agentDir": "~/.openclaw/agent"
+    },
+    "list": [
+      {
+        "id": "architecturer",
+        "name": "架构师助手",
+        "workspace": "~/.openclaw/workspace-architecturer",
+        "agentDir": "~/.openclaw/agents/architecturer/agent"
+      },
+      {
+        "id": "developer",
+        "name": "开发助手",
+        "workspace": "~/.openclaw/workspace-developer",
+        "agentDir": "~/.openclaw/agents/developer/agent",
+        "model": { "primary": "openai-personal/gpt-4o" }  // 专用模型
+      }
+    ]
+  }
+}
+```
+
+**关键规则：**
+
+| 规则 | 说明 |
+|------|------|
+| Agent ID | 自动生成（基于 name 或用户输入），全局唯一 |
+| 目录默认值 | 按规则自动生成，用户可修改 |
+| 专用模型 | 可选，默认使用全局模型优先级设置 |
+| 绑定关系 | Agent 与 Channel 的绑定在 **Channel 模块** 中配置 |
 
 ### 6.4 Memory 配置
 
@@ -496,20 +641,24 @@ Response: {
 
 ## 8. 实现阶段规划
 
-### Phase 1: 基础框架
+### Phase 1: 基础框架 + Provider 模块
 - [ ] 后端 SchemaRegistry 实现
-- [ ] Provider Schema 定义（Moonshot）
 - [ ] 前端动态表单渲染
+- [ ] Moonshot Provider 多实例支持
+- [ ] OpenAI / Anthropic Provider
+- [ ] 模型优先级设置
 - [ ] 基础 API 实现
 
-### Phase 2: 核心功能
-- [ ] OpenAI / Anthropic Provider Schema
-- [ ] Agent 配置模块
-- [ ] Memory 配置模块
-- [ ] Channel 配置模块
+### Phase 2: Agent + Channel 模块
+- [ ] Agent 单/多模式切换
+- [ ] Agent 创建与配置
+- [ ] Channel 多账号配置
+- [ ] Agent-Channel 绑定
 
-### Phase 3: 完善
-- [ ] Custom Provider 支持
+### Phase 3: Memory + 完善
+- [ ] Memory 配置模块
+- [ ] MiniMax Provider
+- [ ] Custom Provider
 - [ ] 配置验证（API Key 校验）
 - [ ] Git 版本管理
 - [ ] 重启机制
