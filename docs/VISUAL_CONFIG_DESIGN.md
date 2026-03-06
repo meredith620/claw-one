@@ -309,6 +309,9 @@ fields:
     allow_custom: true
 
 # OpenAI
+
+> **API 格式说明**: `openai-completions` = 标准 `/chat/completions` 端点（兼容性好）；`openai-responses` = 新版 `/responses` 端点（OpenAI 新功能）。一般第三方 Provider 使用 `openai-completions` 即可。
+
 name: OpenAI
 type: provider
 api: openai-completions  # 默认，可切换为 openai-responses
