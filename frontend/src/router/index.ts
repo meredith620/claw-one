@@ -3,6 +3,7 @@ import ConfigView from '../views/ConfigView.vue'
 import StatusView from '../views/StatusView.vue'
 import SafeModeView from '../views/SafeModeView.vue'
 import SetupWizard from '../views/SetupWizard.vue'
+import ProviderConfigView from '../views/ProviderConfigView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,6 +26,11 @@ const router = createRouter({
       path: '/config',
       name: 'Config',
       component: ConfigView,
+    },
+    {
+      path: '/config/provider',
+      name: 'ProviderConfig',
+      component: ProviderConfigView,
     },
     {
       path: '/safe-mode',
