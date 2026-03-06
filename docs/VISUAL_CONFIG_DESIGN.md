@@ -1,6 +1,6 @@
 # Claw One 可视化配置设计文档
 
-**版本**: v2.4  
+**版本**: v2.5  
 **日期**: 2026-03-06  
 **状态**: ✅ 设计确认完成，进入实现阶段
 
@@ -575,8 +575,132 @@ fields:
 
 ### 6.4 Memory 配置
 
-涉及配置路径:
-- `agents.defaults.memorySearch`
+**设计：全局配置，所有 Agent 共用**
+
+Phase 1 仅支持全局 Memory 配置，后续迭代支持 Agent 级别覆盖。
+
+**支持的 Provider**
+
+| Provider | 配置项 | 需要 API Key |
+|---------|--------|-------------|
+| **Ollama** | `remote.baseUrl` | 否 |
+| **OpenAI** | `remote.apiKey` | 是 |
+
+**UI 设计**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🧠 Memory 配置                                  [保存] [重启]  │
+├──────────────────┬──────────────────────────────────────────────┤
+│  🧠 Provider     │                                               │
+│  🤖 Agent        │  基础配置                                      │
+│  🧠 Memory       │  ───────────────────────────────────────────  │
+│  📱 Channel      │  启用 Memory: [✓]                             │
+│                  │                                               │
+│                  │  Provider: [Ollama ▼]                         │
+│                  │                                               │
+│                  │  ── Ollama 配置 ────────────────────────────  │
+│                  │  Base URL: [http://localhost:11434          ] │
+│                  │  Model: [qwen3-embedding:0.6b ▼]              │
+│                  │                                               │
+│                  │  ── OpenAI 配置 ────────────────────────────  │
+│                  │  API Key: [sk-***                           ] │
+│                  │  Model: [text-embedding-3-small ▼]            │
+│                  │                                               │
+│                  │  ═══════════════════════════════════════════  │
+│                  │  高级功能                                      │
+│                  │  ═══════════════════════════════════════════  │
+│                  │                                               │
+│                  │  向量存储: [✓ 开启]                           │
+│                  │  ├─ 扩展路径: [~/.openclaw/extensions/vec0.so] │
+│                  │  └─ 说明: 启用 SQLite 向量扩展，提升存储性能   │
+│                  │                                               │
+│                  │  混合搜索: [✓ 开启]    ← 依赖向量存储          │
+│                  │  ├─ 向量权重: [0.7        ]                   │
+│                  │  ├─ 文本权重: [0.3        ]                   │
+│                  │  └─ 说明: 结合向量相似度和关键词匹配           │
+│                  │                                               │
+│                  │  [混合搜索高级选项...]  ← 依赖混合搜索          │
+│                  │  ├─ MMR 重排序: [✓]      ← 提升结果多样性      │
+│                  │  └─ 时间衰减: [✓]        ← 优先返回近期记忆    │
+│                  │                                               │
+└──────────────────┴──────────────────────────────────────────────┘
+```
+
+**功能依赖关系**
+
+```
+向量存储 (store.vector.enabled)
+    │
+    ▼ (依赖)
+混合搜索 (query.hybrid.enabled)
+    │
+    ├──► MMR 重排序 (query.hybrid.mmr.enabled)
+    │
+    └──► 时间衰减 (query.hybrid.temporalDecay.enabled)
+```
+
+| 功能 | 依赖 | 可独立开启 |
+|------|------|-----------|
+| 向量存储 | 无 | ✅ |
+| 混合搜索 | 向量存储 | ❌ |
+| MMR 重排序 | 混合搜索 | ❌ |
+| 时间衰减 | 混合搜索 | ❌ |
+
+**UI 联动规则**
+
+| 操作 | 效果 |
+|------|------|
+| 关闭向量存储 | 自动关闭并禁用混合搜索，隐藏 MMR 和时间衰减 |
+| 开启向量存储 | 混合搜索变为可开启 |
+| 关闭混合搜索 | 隐藏/禁用 MMR 和时间衰减选项 |
+| 开启混合搜索 | MMR 和时间衰减变为可独立开启 |
+
+**配置映射**
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "memorySearch": {
+        "enabled": true,
+        "provider": "ollama",
+        "remote": {
+          "baseUrl": "http://localhost:11434"
+        },
+        "model": "qwen3-embedding:0.6b",
+        "store": {
+          "vector": {
+            "enabled": true,
+            "extensionPath": "~/.openclaw/extensions/vec0.so"
+          }
+        },
+        "query": {
+          "hybrid": {
+            "enabled": true,
+            "vectorWeight": 0.7,
+            "textWeight": 0.3,
+            "mmr": {
+              "enabled": true
+            },
+            "temporalDecay": {
+              "enabled": true,
+              "halfLifeDays": 30
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**设计原则**
+
+- 可视化界面仅暴露核心配置（enabled, provider, baseUrl/apiKey, model）
+- 高级功能通过开关控制，依赖关系自动处理
+- 其他配置项（如 halfLifeDays、lambda 等）保留在 openclaw.json 中，用户可手工编辑
+- 所有开关默认关闭，用户按需开启
 
 ### 6.5 Channel 配置
 
