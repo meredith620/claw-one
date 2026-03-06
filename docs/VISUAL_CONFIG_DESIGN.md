@@ -1,6 +1,6 @@
 # Claw One 可视化配置设计文档
 
-**版本**: v2.3  
+**版本**: v2.4  
 **日期**: 2026-03-06  
 **状态**: ✅ 设计确认完成，进入实现阶段
 
@@ -580,9 +580,151 @@ fields:
 
 ### 6.5 Channel 配置
 
-涉及配置路径:
-- `channels.feishu`（支持多账号）
-- `channels.mattermost`（支持多账号）
+**设计：类型 + 账号列表（Mattermost）/ 单实例（飞书）**
+
+| Channel | 结构 | 多账号 | 绑定粒度 |
+|---------|------|--------|---------|
+| **Mattermost** | `accounts.{id}` | ✅ 支持 | 账号级别（`accountId`） |
+| **飞书** | 单实例 | ❌ 不支持 | 用户/群级别（`peer.id`） |
+
+**UI 设计：**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  📱 Channel 配置                                 [保存] [重启]  │
+├──────────────────┬──────────────────────────────────────────────┤
+│  🧠 Provider     │                                               │
+│  🤖 Agent        │  ── Mattermost ─────────────────────────────  │
+│  🧠 Memory       │  全局配置:                                     │
+│  📱 Channel      │  ├─ enabled: [✓]                              │
+│                  │  ├─ dmPolicy: [pairing ▼]                     │
+│                  │  └─ groupPolicy: [allowlist ▼]                │
+│                  │                                               │
+│                  │  账号列表:                                     │
+│                  │  ┌─ default ──────────────────────────────┐  │
+│                  │  │  name: Main Bot                         │  │
+│                  │  │  botToken: ***                          │  │
+│                  │  │  baseUrl: https://mm.hengshi.com        │  │
+│                  │  │  绑定 Agent: [main ▼]      [配置] [删除]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  ┌─ architecturer ─────────────────────────┐  │
+│                  │  │  name: Architecturer Bot                │  │
+│                  │  │  botToken: ***                          │  │
+│                  │  │  baseUrl: https://mm.hengshi.com        │  │
+│                  │  │  绑定 Agent: [architecturer ▼] [配置][删]│  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  [+ 添加 Mattermost 账号]                       │
+│                  │                                               │
+│                  │  ── 飞书 ───────────────────────────────────  │
+│                  │  全局配置:                                     │
+│                  │  ├─ enabled: [✓]                              │
+│                  │  ├─ dmPolicy: [pairing ▼]                     │
+│                  │  ├─ connectionMode: [websocket ▼]             │
+│                  │  └─ renderMode: [raw ▼]                       │
+│                  │                                               │
+│                  │  认证配置:                                     │
+│                  │  ├─ appId: [cli_xxxx        ]                 │
+│                  │  └─ appSecret: [*****       ]                 │
+│                  │                                               │
+│                  │  绑定列表 (Multi-Agent 模式):                  │
+│                  │  ┌─ ou_xxx ───────────────────────────────┐  │
+│                  │  │  类型: 用户  绑定 Agent: [agent-1 ▼]   │  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  ┌─ ou_yyy ───────────────────────────────┐  │
+│                  │  │  类型: 群    绑定 Agent: [agent-2 ▼]   │  │
+│                  │  └─────────────────────────────────────────┘  │
+│                  │  [+ 添加绑定]                                   │
+│                  │                                               │
+└──────────────────┴──────────────────────────────────────────────┘
+```
+
+**添加 Mattermost 账号：**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  添加 Mattermost 账号                              [保存]   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  账号 ID: [work              ]  (唯一标识，如 default)       │
+│  显示名称: [Work Bot         ]                                │
+│  Bot Token: [*****          ]                                 │
+│  Base URL: [https://mm.hengshi.com]                          │
+│                                                              │
+│  绑定 Agent: [architecturer ▼]  (从已创建 Agent 中选择)      │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**添加飞书绑定（Multi-Agent 模式）：**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  添加飞书绑定                                      [保存]   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  用户/群 ID: [ou_zzz         ]  (飞书用户的 Open ID)         │
+│  类型: [用户 ▼]  (用户/群)                                   │
+│  绑定 Agent: [下拉选择 ▼]  (从已创建的 Agent 中选择)          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**配置映射：**
+
+```json
+{
+  "channels": {
+    "mattermost": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "accounts": {
+        "default": {
+          "name": "Main Bot",
+          "botToken": "...",
+          "baseUrl": "https://mm.hengshi.com"
+        },
+        "architecturer": {
+          "name": "Architecturer Bot",
+          "botToken": "...",
+          "baseUrl": "https://mm.hengshi.com"
+        }
+      }
+    },
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_xxx",
+      "appSecret": "xxx",
+      "connectionMode": "websocket",
+      "dmPolicy": "pairing",
+      "renderMode": "raw"
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "main",
+      "match": { "channel": "mattermost", "accountId": "default" }
+    },
+    {
+      "agentId": "architecturer",
+      "match": { "channel": "mattermost", "accountId": "architecturer" }
+    },
+    {
+      "agentId": "qiangxianfei",
+      "match": { "channel": "feishu", "peer": { "kind": "dm", "id": "ou_xxx" } }
+    }
+  ]
+}
+```
+
+**关键规则：**
+
+| 规则 | 说明 |
+|------|------|
+| Mattermost | 支持多账号，每个账号独立配置 + 绑定 Agent |
+| 飞书 | 单实例，通过绑定列表管理不同用户/群到不同 Agent |
+| Default Agent 模式 | 飞书绑定列表可为空（使用 default agent） |
+| Multi-Agent 模式 | 必须配置绑定关系，否则消息无法路由 |
 
 ---
 
