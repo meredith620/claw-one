@@ -1,6 +1,6 @@
 # Claw One 可视化配置设计文档
 
-**版本**: v2.5  
+**版本**: v2.6  
 **日期**: 2026-03-06  
 **状态**: ✅ 设计确认完成，进入实现阶段
 
@@ -34,9 +34,10 @@
 | **Agent 工作区创建** | 自动提供建议值，用户不修改就用建议值 |
 | **模型列表** | 固定列表 + 支持自定义输入 |
 | **Memory Provider** | 先 Ollama，后期可扩展 |
-| **飞书多账号** | ✅ 支持多账号，参考 Mattermost 设计 |
-| **API Key 验证** | 保存时验证有效性 |
-| **版本管理** | 以 openclaw.json 整体做 Git 版本管理 |
+| **飞书** | ❌ 单实例设计，不支持多账号 |
+| **API Key 验证** | 保存时验证，失败页面提示，Provider ID 冲突检测 |
+| **版本管理** | Gateway 启动成功后自动保存，标记点回滚 |
+| **Safe Mode** | 重启失败且配置原因时进入，支持回滚 |
 | **默认模型设置** | Provider 设置时可设为默认模型 |
 | **内置 Provider** | Moonshot、OpenAI、Anthropic、MiniMax、Custom |
 | **Provider 多实例** | ✅ 支持，每个类型可创建多个不同 API Key 的实例 |
@@ -57,7 +58,164 @@
 
 ---
 
-## 4. 系统架构
+## 4. Provider Schema 定义
+
+> 内置 Provider 使用固定 `api` 字段，**只有 Custom Provider 需要用户选择 API 格式**。
+
+### 4.1 Moonshot
+
+```yaml
+name: Moonshot
+type: provider
+api: openai-completions  # 固定，不需要用户选择
+fields:
+  - id: enabled
+    type: boolean
+    label: 启用 Provider
+    default: true
+  - id: apiKey
+    type: password
+    label: API Key
+    required: true
+  - id: baseUrl
+    type: string
+    label: Base URL
+    default: https://api.moonshot.ai/v1
+  - id: defaultModel
+    type: select
+    label: 默认模型
+    options:
+      - value: kimi-k2.5
+        label: Kimi K2.5
+      - value: kimi-k2-thinking
+        label: Kimi K2 Thinking
+    allow_custom: true
+```
+
+### 4.2 OpenAI
+
+> **API 格式说明**: `openai-completions` = 标准 `/chat/completions` 端点（兼容性好）；`openai-responses` = 新版 `/responses` 端点（OpenAI 新功能）。一般第三方 Provider 使用 `openai-completions` 即可。
+
+```yaml
+name: OpenAI
+type: provider
+api: openai-completions  # 默认，可切换为 openai-responses
+fields:
+  - id: enabled
+    type: boolean
+    label: 启用 Provider
+    default: true
+  - id: apiKey
+    type: password
+    label: API Key
+    required: true
+  - id: baseUrl
+    type: string
+    label: Base URL
+    default: https://api.openai.com/v1
+  - id: apiVariant
+    type: select
+    label: API 类型
+    default: openai-completions
+    options:
+      - value: openai-completions
+        label: Completions API
+      - value: openai-responses
+        label: Responses API
+  - id: defaultModel
+    type: select
+    label: 默认模型
+    options:
+      - value: gpt-4o
+        label: GPT-4o
+      - value: gpt-4o-mini
+        label: GPT-4o Mini
+      - value: gpt-3.5-turbo
+        label: GPT-3.5 Turbo
+    allow_custom: true
+```
+
+### 4.3 Anthropic
+
+```yaml
+name: Anthropic
+type: provider
+api: anthropic-messages  # 固定，不需要用户选择
+fields:
+  - id: enabled
+    type: boolean
+    label: 启用 Provider
+    default: true
+  - id: apiKey
+    type: password
+    label: API Key
+    required: true
+  - id: baseUrl
+    type: string
+    label: Base URL
+    default: https://api.anthropic.com/v1
+  - id: defaultModel
+    type: select
+    label: 默认模型
+    options:
+      - value: claude-3-opus
+        label: Claude 3 Opus
+      - value: claude-3-sonnet
+        label: Claude 3 Sonnet
+      - value: claude-3-haiku
+        label: Claude 3 Haiku
+    allow_custom: true
+```
+
+### 4.4 Custom (用户自定义 Provider)
+
+```yaml
+name: Custom
+type: provider
+fields:
+  - id: enabled
+    type: boolean
+    label: 启用 Provider
+    default: true
+  - id: providerId
+    type: string
+    label: Provider ID
+    required: true
+    placeholder: 如 deepseek、qwen、volcengine 等
+  - id: name
+    type: string
+    label: 显示名称
+    required: true
+  - id: apiKey
+    type: password
+    label: API Key
+    required: true
+  - id: baseUrl
+    type: string
+    label: Base URL
+    required: true
+    placeholder: https://api.example.com/v1
+  - id: apiFormat  # <-- 只有 Custom 需要选择 API 格式
+    type: select
+    label: API 格式
+    required: true
+    options:
+      - value: openai-completions
+        label: OpenAI Completions (兼容 OpenAI 格式)
+      - value: openai-responses
+        label: OpenAI Responses (OpenAI Responses API)
+      - value: anthropic-messages
+        label: Anthropic Messages (兼容 Claude 格式)
+  - id: defaultModel
+    type: string
+    label: 默认模型
+    required: true
+    placeholder: 输入模型 ID，如 deepseek-chat
+```
+
+---
+
+## 5. 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -527,14 +685,10 @@ fields:
 │  ├─ 默认生成规则: ~/.openclaw/agents/{id}/agent              │
 │  └─ 用户可修改                                               │
 │                                                              │
-│  专用模型 (可选): [使用默认 ▼]                                │
-│  ├─ 使用默认 (跟随全局模型优先级)                             │
-│  ├─ moonshot-work/kimi-k2.5                                  │
-│  ├─ openai-personal/gpt-4o                                   │
-│  └─ ... (从已启用的 Provider 实例中选择)                      │
-│                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **注意**: 本期暂不实现 Agent 专用模型，所有 Agent 使用全局模型优先级设置。
 
 **配置映射：**
 
@@ -781,12 +935,14 @@ Phase 1 仅支持全局 Memory 配置，后续迭代支持 Agent 级别覆盖。
 
 **添加飞书绑定（Multi-Agent 模式）：**
 
+> 飞书用户/群 ID (ou_xxx) 从 openclaw.json 的 bindings 中自动解析获取
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  添加飞书绑定                                      [保存]   │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  用户/群 ID: [ou_zzz         ]  (飞书用户的 Open ID)         │
+│  用户/群 ID: [ou_zzz         ]  (从已交互用户中选择或手动输入)│
 │  类型: [用户 ▼]  (用户/群)                                   │
 │  绑定 Agent: [下拉选择 ▼]  (从已创建的 Agent 中选择)          │
 │                                                              │
@@ -852,7 +1008,84 @@ Phase 1 仅支持全局 Memory 配置，后续迭代支持 Agent 级别覆盖。
 
 ---
 
-## 7. API 设计
+## 7. 安全与认证
+
+### 7.1 页面认证
+
+- 配置页面需要用户名密码认证
+- 用户名密码存储在 `claw-one.toml` 中
+- 未认证用户无法访问任何配置 API
+
+### 7.2 API Key 存储
+
+| 位置 | 处理方式 |
+|------|---------|
+| 前端显示 | 明文显示（如 `sk-***`），可点击显示完整 |
+| 后端存储 | 不加密，直接存储在 `openclaw.json` 中 |
+| 传输 | HTTPS 加密传输 |
+
+### 7.3 Provider ID 冲突检测
+
+- 保存时检测 Provider ID 是否已存在
+- 冲突时阻止保存并提示用户
+- Custom Provider ID 不能与内置 Provider ID 重复
+
+---
+
+## 8. Git 版本管理
+
+### 8.1 自动保存机制
+
+| 时机 | 行为 |
+|------|------|
+| Gateway 启动成功 | 检测 `openclaw.json` 与 Git 最新版本是否一致 |
+| 有变化且启动成功 | 自动执行 `git commit`，标记为有效版本 |
+| 手动保存配置 | 用户手动触发保存并 commit |
+
+### 8.2 回滚机制
+
+- 仅提供回滚标记点信息（commit hash、时间）
+- 不显示具体变更内容
+- 用户选择回滚到某个标记点
+- Safe Mode 下可快速回滚到前一个版本
+
+---
+
+## 9. Safe Mode（安全模式）
+
+### 9.1 触发条件
+
+重启 OpenClaw Gateway 失败，且判定为配置文件原因时：
+1. 解析错误（JSON 格式非法）
+2. 配置项缺失或类型错误
+3. 关键配置验证失败
+
+### 9.2 Safe Mode 行为
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ⚠️ Safe Mode - 配置错误                                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  OpenClaw Gateway 启动失败，检测到配置文件错误：               │
+│  • models.providers.moonshot.apiKey: 不能为空               │
+│                                                              │
+│  可选操作：                                                  │
+│  1. [回滚到前一版本]  ← 快速恢复到上一个有效配置             │
+│  2. [继续编辑配置]    ← 在当前配置基础上修复                 │
+│  3. [查看原始错误]    ← 显示详细的启动日志                   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 9.3 退出 Safe Mode
+
+- 修复配置并成功重启 Gateway 后自动退出
+- 或回滚到有效版本后自动退出
+
+---
+
+## 10. API 设计
 
 ### 获取模块配置
 
@@ -905,33 +1138,37 @@ Response: {
 
 ---
 
-## 8. 实现阶段规划
+## 11. 实现阶段规划
 
 ### Phase 1: 基础框架 + Provider 模块
 - [ ] 后端 SchemaRegistry 实现
 - [ ] 前端动态表单渲染
+- [ ] 页面认证（用户名密码）
 - [ ] Moonshot Provider 多实例支持
 - [ ] OpenAI / Anthropic Provider
 - [ ] 模型优先级设置
+- [ ] Provider ID 冲突检测
 - [ ] 基础 API 实现
 
 ### Phase 2: Agent + Channel 模块
 - [ ] Agent 单/多模式切换
-- [ ] Agent 创建与配置
-- [ ] Channel 多账号配置
+- [ ] Agent 创建与配置（本期无专用模型）
+- [ ] Channel 多账号配置（Mattermost）
+- [ ] 飞书单实例配置
 - [ ] Agent-Channel 绑定
+- [ ] 飞书用户/群 ID 解析
 
 ### Phase 3: Memory + 完善
 - [ ] Memory 配置模块
+- [ ] Git 自动版本管理
+- [ ] Safe Mode 实现
 - [ ] MiniMax Provider
 - [ ] Custom Provider
-- [ ] 配置验证（API Key 校验）
-- [ ] Git 版本管理
-- [ ] 重启机制
+- [ ] API Key 验证
 
 ---
 
-## 9. 历史文档
+## 12. 历史文档
 
 - `VISUAL_CONFIG_DESIGN_v2.md` - 本合并版本的前身文档
 - `CONFIG_MODULAR_RESEARCH.md` - 方案调研分析
