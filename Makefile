@@ -19,11 +19,10 @@ help:
 	@echo "  make dist-check  - 打包并生成校验和"
 	@echo "  make backend     - 只构建后端"
 	@echo "  make frontend    - 只构建前端"
-	@echo "  make dev         - 启动开发环境"
+	@echo "  make dev         - 启动开发环境 (前台运行，Ctrl+C 停止)"
 	@echo "  make install     - 安装依赖"
 	@echo "  make clean       - 清理构建产物"
 	@echo "  make test        - 运行测试"
-	@echo "  make deploy      - 部署到生产环境"
 
 # 构建前后端
 build: backend frontend
@@ -41,11 +40,13 @@ frontend:
 	cd frontend && npm install && npx vite build
 	@echo "✅ 前端构建完成"
 
-# 开发模式
-dev:
-	@echo "🚀 启动开发环境..."
-	@echo "请手动启动后端: cd backend && cargo run"
-	@echo "请手动启动前端: cd frontend && npm run dev"
+# 开发模式 - 前台运行，Ctrl+C 停止
+dev: backend
+	@echo "🚀 启动开发服务器..."
+	@echo "按 Ctrl+C 停止"
+	@echo ""
+	@export CLAW_ONE_CONFIG="$(HOME)/claw-one/config/claw-one.toml" && \
+	./backend/target/release/claw-one-backend run
 
 # 安装依赖
 install:

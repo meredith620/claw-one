@@ -155,7 +155,7 @@ configure_systemd() {
         
         PORT=$(grep -E "^port\s*=" "$CONFIG_DIR/claw-one.toml" | sed 's/.*=\s*//' | tr -d '"')
         
-        cat > "$SYSTEMD_USER_DIR/claw-one.service" <> EOF
+        cat > "$SYSTEMD_USER_DIR/claw-one.service" <<EOF
 [Unit]
 Description=Claw One - OpenClaw Management Interface
 After=network.target

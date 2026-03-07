@@ -2,6 +2,9 @@ backend/target/
 frontend/node_modules/
 static/dist/
 
+# 开发测试配置（不提交到仓库）
+dev-config/
+
 # 构建产物
 dist/
 build/
