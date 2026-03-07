@@ -176,7 +176,7 @@ rotate_logs() {
 rotate_logs
 
 # 启动后端并输出到日志
-exec "$HOME/claw-one/bin/claw-one-backend" run >> "$LOG_FILE" 2>&1
+exec "$HOME/claw-one/bin/claw-one" run >> "$LOG_FILE" 2>&1
 EOF
     
     chmod +x "$wrapper_path"
@@ -267,7 +267,7 @@ start_service() {
         else
             # 手动启动
             print_info "手动启动服务..."
-            print_info "启动命令: $HOME/claw-one/bin/claw-one-backend run"
+            print_info "启动命令: $HOME/claw-one/bin/claw-one run"
             print_info "日志输出: 标准输出（控制台）"
             echo ""
             print_warn "请在另一个终端运行上述命令启动服务"
@@ -300,7 +300,7 @@ start_service() {
         echo -e "${GREEN}✅ 配置完成！${NC}"
         echo ""
         echo "启动命令:"
-        echo "  $HOME/claw-one/bin/claw-one-backend run"
+        echo "  $HOME/claw-one/bin/claw-one run"
         echo ""
         echo "访问地址: http://localhost:$PORT"
     fi

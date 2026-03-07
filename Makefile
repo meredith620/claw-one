@@ -1,4 +1,4 @@
-.PHONY: all build backend frontend dev clean deps test help dist dist-check
+.PHONY: all build hull bridge dev clean deps test help dist dist-check
 
 # 版本和架构
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
@@ -17,63 +17,57 @@ help:
 	@echo "  make deps        - 安装前后端环境依赖"
 	@echo "  make dev         - 启动开发环境 (前台运行，Ctrl+C 停止)"
 	@echo "  make build       - 构建前后端 (生产环境)"
-	@echo "  make backend     - 只构建后端"
-	@echo "  make frontend    - 只构建前端"
+	@echo "  make hull        - 只构建 hull (核心)"
+	@echo "  make bridge      - 只构建 bridge (界面)"
 	@echo "  make dist        - 打包独立安装包"
 	@echo "  make dist-check  - 打包并生成校验和"
 	@echo "  make clean       - 清理构建产物"
 	@echo "  make test        - 运行测试"
 
 # 构建前后端
-build: backend frontend
+build: hull bridge
 	@echo "✅ 构建完成"
 
-# 构建后端
-backend:
-	@echo "🔨 构建后端..."
-	cd backend && cargo build --release
-	@echo "✅ 后端构建完成"
+# 构建 hull (原 backend)
+hull:
+	@echo "🔨 构建 hull..."
+	cd hull && cargo build --release
+	@echo "✅ hull 构建完成"
 
-# 构建前端
-frontend:
-	@echo "🎨 构建前端..."
-	cd frontend && npm install && npx vite build
-	@echo "✅ 前端构建完成"
+# 构建 bridge (原 frontend)
+bridge:
+	@echo "🎨 构建 bridge..."
+	cd bridge && npm install && npx vite build
+	@echo "✅ bridge 构建完成"
 
 # 开发模式 - 前台运行，Ctrl+C 停止
-dev: backend
+dev: hull
 	@echo "🚀 启动开发服务器..."
 	@echo "按 Ctrl+C 停止"
 	@echo ""
 	@export CLAW_ONE_CONFIG="$(HOME)/claw-one/config/claw-one.toml" && \
-	./backend/target/release/claw-one-backend run
+	./hull/target/release/claw-one run
 
 # 安装依赖
 deps:
 	@echo "📦 安装前后端环境依赖..."
-	cd frontend && npm install
-	cd backend && cargo fetch
+	cd bridge && npm install
+	cd hull && cargo fetch
 	@echo "✅ 依赖安装完成"
 
 # 清理
 clean:
 	@echo "🧹 清理构建产物..."
-	cd backend && cargo clean
-	cd frontend && rm -rf dist node_modules
+	cd hull && cargo clean
+	cd bridge && rm -rf dist node_modules
 	rm -rf dist/
 	@echo "✅ 清理完成"
 
 # 测试
 test:
 	@echo "🧪 运行测试..."
-	cd backend && cargo test
-	cd frontend && npm run test || echo "前端测试跳过"
-
-# 部署
-deploy: build
-	@echo "🚀 部署..."
-	./deploy.sh init
-	./deploy.sh start
+	cd hull && cargo test
+	cd bridge && npm run test || echo "前端测试跳过"
 
 # 打包独立安装包
 dist: build
@@ -85,9 +79,9 @@ dist: build
 	@mkdir -p dist/$(DIST_NAME)/share/static
 	@mkdir -p dist/$(DIST_NAME)/share/config
 	@mkdir -p dist/$(DIST_NAME)/scripts
-	@cp backend/target/release/claw-one-backend dist/$(DIST_NAME)/bin/
-	@chmod +x dist/$(DIST_NAME)/bin/claw-one-backend
-	@echo "✓ 后端程序"
+	@cp hull/target/release/claw-one dist/$(DIST_NAME)/bin/
+	@chmod +x dist/$(DIST_NAME)/bin/claw-one
+	@echo "✓ 核心程序"
 	@cp -r static/dist/* dist/$(DIST_NAME)/share/static/
 	@echo "✓ 静态文件"
 	@cp scripts/install.sh scripts/uninstall.sh scripts/check-env.sh dist/$(DIST_NAME)/scripts/

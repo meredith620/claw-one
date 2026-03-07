@@ -57,7 +57,7 @@ stop_service() {
     fi
     
     # 查找并终止手动启动的进程
-    PID=$(pgrep -f "claw-one-backend" || true)
+    PID=$(pgrep -f "claw-one" || true)
     if [ -n "$PID" ]; then
         print_warn "发现运行中的进程 (PID: $PID)"
         read -p "是否终止该进程? [Y/n]: " confirm

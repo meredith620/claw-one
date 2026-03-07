@@ -1,5 +1,6 @@
-backend/target/
-frontend/node_modules/
+hull/target/
+bridge/node_modules/
+bridge/dist/
 static/dist/
 
 # 开发测试配置（不提交到仓库）

@@ -100,13 +100,13 @@ create_directories() {
 copy_files() {
     print_info "复制文件..."
     
-    # 复制后端二进制
-    if [ -f "$SCRIPT_DIR/../bin/claw-one-backend" ]; then
-        cp "$SCRIPT_DIR/../bin/claw-one-backend" "$BIN_DIR/"
-        chmod +x "$BIN_DIR/claw-one-backend"
-        print_ok "后端程序已复制"
+    # 复制核心程序
+    if [ -f "$SCRIPT_DIR/../bin/claw-one" ]; then
+        cp "$SCRIPT_DIR/../bin/claw-one" "$BIN_DIR/"
+        chmod +x "$BIN_DIR/claw-one"
+        print_ok "核心程序已复制"
     else
-        print_error "未找到后端程序: bin/claw-one-backend"
+        print_error "未找到核心程序: bin/claw-one"
         exit 1
     fi
     
@@ -181,12 +181,12 @@ create_symlink() {
     LOCAL_BIN="$HOME/.local/bin"
     
     if [ -d "$LOCAL_BIN" ]; then
-        ln -sf "$BIN_DIR/claw-one-backend" "$LOCAL_BIN/claw-one"
+        ln -sf "$BIN_DIR/claw-one" "$LOCAL_BIN/claw-one"
         print_ok "快捷方式已创建: ~/.local/bin/claw-one"
         print_info "请确保 ~/.local/bin 在 PATH 中"
     else
         print_warn "未找到 ~/.local/bin，跳过创建快捷方式"
-        print_info "可以手动创建: ln -s $BIN_DIR/claw-one-backend ~/.local/bin/claw-one"
+        print_info "可以手动创建: ln -s $BIN_DIR/claw-one ~/.local/bin/claw-one"
     fi
 }
 
@@ -208,7 +208,7 @@ print_completion() {
     echo "     $BIN_DIR/setup-config.sh"
     echo ""
     echo "  2. 手动启动服务:"
-    echo "     $BIN_DIR/claw-one-backend run"
+    echo "     $BIN_DIR/claw-one run"
     echo ""
     echo "  3. 或使用 systemd 用户服务:"
     echo "     systemctl --user start claw-one"
