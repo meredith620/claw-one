@@ -1,4 +1,4 @@
-.PHONY: all build backend frontend dev clean install test help dist dist-check
+.PHONY: all build backend frontend dev clean deps test help dist dist-check
 
 # 版本和架构
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
@@ -14,13 +14,13 @@ help:
 	@echo "Claw One - 配置管理界面"
 	@echo ""
 	@echo "可用命令:"
+	@echo "  make deps        - 安装前后端环境依赖"
+	@echo "  make dev         - 启动开发环境 (前台运行，Ctrl+C 停止)"
 	@echo "  make build       - 构建前后端 (生产环境)"
-	@echo "  make dist        - 打包独立安装包"
-	@echo "  make dist-check  - 打包并生成校验和"
 	@echo "  make backend     - 只构建后端"
 	@echo "  make frontend    - 只构建前端"
-	@echo "  make dev         - 启动开发环境 (前台运行，Ctrl+C 停止)"
-	@echo "  make install     - 安装依赖"
+	@echo "  make dist        - 打包独立安装包"
+	@echo "  make dist-check  - 打包并生成校验和"
 	@echo "  make clean       - 清理构建产物"
 	@echo "  make test        - 运行测试"
 
@@ -49,8 +49,8 @@ dev: backend
 	./backend/target/release/claw-one-backend run
 
 # 安装依赖
-install:
-	@echo "📦 安装依赖..."
+deps:
+	@echo "📦 安装前后端环境依赖..."
 	cd frontend && npm install
 	cd backend && cargo fetch
 	@echo "✅ 依赖安装完成"
