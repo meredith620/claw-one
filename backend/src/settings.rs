@@ -177,17 +177,28 @@ impl Settings {
 
     /// 获取静态文件目录
     pub fn static_dir(&self) -> PathBuf {
-        if self.paths.static_dir.is_empty() {
-            // 默认使用相对路径 - 从backend目录出发
-            std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|d| d.parent().map(|d2| d2.to_path_buf())))
-                .flatten()
-                .map(|d| d.join("static").join("dist"))
-                .unwrap_or_else(|| PathBuf::from("../static/dist"))
-        } else {
-            expand_path(&self.paths.static_dir)
+        if !self.paths.static_dir.is_empty() {
+            return expand_path(&self.paths.static_dir);
         }
+        
+        // 从可执行文件路径推导
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(install_dir) = exe.parent().and_then(|p| p.parent()) {
+                // 优先检查 share/static (安装后的标准路径)
+                let share_static = install_dir.join("share").join("static");
+                if share_static.exists() {
+                    return share_static;
+                }
+                // 兼容旧路径 static/dist (开发环境)
+                let old_static = install_dir.join("static").join("dist");
+                if old_static.exists() {
+                    return old_static;
+                }
+            }
+        }
+        
+        // 默认回退
+        PathBuf::from("../static/dist")
     }
 
     /// 获取 OpenClaw 安装根目录

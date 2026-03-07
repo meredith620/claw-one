@@ -101,19 +101,23 @@ configure_openclaw() {
     
     OPENCLAW_HOME=${input_path:-$DEFAULT_OPENCLAW_HOME}
     
-    # 展开 ~ 为家目录
-    OPENCLAW_HOME="${OPENCLAW_HOME/#\~/$HOME}"
-    
-    # 创建目录
-    mkdir -p "$OPENCLAW_HOME"
+    # 确保路径是绝对路径
+    if [[ "$OPENCLAW_HOME" == ~* ]]; then
+        OPENCLAW_HOME="${OPENCLAW_HOME/#\~/$HOME}"
+    fi
     
     # 更新配置
-    sed -i "s|openclaw_home\s*=\s*\".*\"|openclaw_home = \"$OPENCLAW_HOME\"|" "$CONFIG_DIR/claw-one.toml"
+    sed -i "s|openclaw_home = .*|openclaw_home = \"$OPENCLAW_HOME\"|" "$CONFIG_DIR/claw-one.toml"
+    print_ok "OpenClaw 路径已设置: $OPENCLAW_HOME"
     
-    # 创建 openclaw.json 如果不存在
-    if [ ! -f "$OPENCLAW_HOME/openclaw.json" ]; then
-        cat > "$OPENCLAW_HOME/openclaw.json" <<EOF
+    # 初始化 OpenClaw 配置
+    if [ ! -f "$CONFIG_DIR/openclaw.json" ]; then
+        mkdir -p "$OPENCLAW_HOME"
+        cat > "$CONFIG_DIR/openclaw.json" << 'EOF'
 {
+  "gateway": {
+    "configPath": "~/.openclaw"
+  },
   "models": {
     "providers": {}
   },
@@ -126,7 +130,7 @@ configure_openclaw() {
   "channels": {}
 }
 EOF
-        print_ok "OpenClaw 配置已创建: $OPENCLAW_HOME/openclaw.json"
+        print_ok "OpenClaw 配置已创建"
     else
         print_ok "OpenClaw 配置已存在"
     fi
@@ -134,10 +138,57 @@ EOF
     echo ""
 }
 
+# 创建日志滚动脚本
+create_log_wrapper() {
+    local wrapper_path="$INSTALL_DIR/bin/claw-one-log-wrapper.sh"
+    
+    cat > "$wrapper_path" << 'EOF'
+#!/bin/bash
+# Claw One 日志滚动 wrapper
+# 按天滚动日志，保留最近5天
+
+LOG_DIR="$HOME/claw-one/logs"
+LOG_FILE="$LOG_DIR/claw-one.log"
+
+# 确保日志目录存在
+mkdir -p "$LOG_DIR"
+
+# 滚动日志（如果当前日志文件存在且是新的一天）
+rotate_logs() {
+    if [ -f "$LOG_FILE" ]; then
+        # 获取文件最后修改日期
+        local file_date=$(stat -c %Y "$LOG_FILE" 2>/dev/null || stat -f %m "$LOG_FILE" 2>/dev/null)
+        local today=$(date +%s)
+        local day_seconds=86400
+        
+        # 如果文件是昨天或更早的，则滚动
+        if [ $(( (today - file_date) / day_seconds )) -ge 1 ]; then
+            local date_suffix=$(date -r "$LOG_FILE" +%Y%m%d 2>/dev/null || date -j -f %s "$file_date" +%Y%m%d 2>/dev/null)
+            mv "$LOG_FILE" "$LOG_DIR/claw-one.$date_suffix.log"
+        fi
+    fi
+    
+    # 删除超过5天的日志
+    find "$LOG_DIR" -name "claw-one.*.log" -type f -mtime +5 -delete 2>/dev/null || true
+}
+
+# 执行滚动
+rotate_logs
+
+# 启动后端并输出到日志
+exec "$HOME/claw-one/bin/claw-one-backend" run >> "$LOG_FILE" 2>&1
+EOF
+    
+    chmod +x "$wrapper_path"
+}
+
 # 配置 systemd 用户服务
 configure_systemd() {
     echo "[3/4] 服务启动方式"
     echo ""
+    
+    # 先创建日志滚动脚本
+    create_log_wrapper
     
     if ! command -v systemctl &> /dev/null; then
         print_warn "未检测到 systemd，将使用手动启动"
@@ -147,6 +198,7 @@ configure_systemd() {
     echo "是否创建 systemd 用户服务？"
     echo "  - 可以随用户登录自动启动"
     echo "  - 支持 systemctl 命令管理"
+    echo "  - 日志自动滚动，保留最近5天"
     echo ""
     read -p "创建 systemd 用户服务? [Y/n]: " confirm
     
@@ -155,14 +207,14 @@ configure_systemd() {
         
         PORT=$(grep -E "^port\s*=" "$CONFIG_DIR/claw-one.toml" | sed 's/.*=\s*//' | tr -d '"')
         
-        cat > "$SYSTEMD_USER_DIR/claw-one.service" <<EOF
+        cat > "$SYSTEMD_USER_DIR/claw-one.service" << EOF
 [Unit]
 Description=Claw One - OpenClaw Management Interface
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=$HOME/claw-one/bin/claw-one-backend run
+ExecStart=$HOME/claw-one/bin/claw-one-log-wrapper.sh
 WorkingDirectory=$HOME/claw-one
 Restart=on-failure
 RestartSec=5
@@ -179,8 +231,12 @@ EOF
         echo "  停止: systemctl --user stop claw-one"
         echo "  状态: systemctl --user status claw-one"
         echo "  自启: systemctl --user enable claw-one"
+        echo ""
+        print_info "日志位置: ~/claw-one/logs/claw-one.log"
+        print_info "日志滚动: 按天滚动，保留最近5天"
     else
         print_info "跳过 systemd 配置"
+        print_info "手动启动日志将输出到标准输出"
     fi
     
     echo ""
@@ -206,11 +262,13 @@ start_service() {
             else
                 print_error "服务启动失败"
                 print_info "查看日志: journalctl --user -u claw-one"
+                print_info "或查看: ~/claw-one/logs/claw-one.log"
             fi
         else
             # 手动启动
             print_info "手动启动服务..."
             print_info "启动命令: $HOME/claw-one/bin/claw-one-backend run"
+            print_info "日志输出: 标准输出（控制台）"
             echo ""
             print_warn "请在另一个终端运行上述命令启动服务"
             echo ""
