@@ -112,7 +112,7 @@ configure_openclaw() {
     
     # 创建 openclaw.json 如果不存在
     if [ ! -f "$OPENCLAW_HOME/openclaw.json" ]; then
-        cat > "$OPENCLAW_HOME/openclaw.json" <> 'EOF'
+        cat > "$OPENCLAW_HOME/openclaw.json" <<EOF
 {
   "models": {
     "providers": {}

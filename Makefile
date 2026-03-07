@@ -38,7 +38,7 @@ backend:
 # 构建前端
 frontend:
 	@echo "🎨 构建前端..."
-	cd frontend && npm install && npm run build
+	cd frontend && npm install && npx vite build
 	@echo "✅ 前端构建完成"
 
 # 开发模式
@@ -79,7 +79,11 @@ dist: build
 	@echo "📦 创建独立安装包..."
 	@echo "版本: $(VERSION), 架构: $(ARCH)"
 	@echo ""
-	@mkdir -p dist/$(DIST_NAME)/{bin,share/{static,config},scripts}
+	@rm -rf dist/$(DIST_NAME)
+	@mkdir -p dist/$(DIST_NAME)/bin
+	@mkdir -p dist/$(DIST_NAME)/share/static
+	@mkdir -p dist/$(DIST_NAME)/share/config
+	@mkdir -p dist/$(DIST_NAME)/scripts
 	@cp backend/target/release/claw-one-backend dist/$(DIST_NAME)/bin/
 	@chmod +x dist/$(DIST_NAME)/bin/claw-one-backend
 	@echo "✓ 后端程序"
@@ -92,17 +96,10 @@ dist: build
 	@echo "✓ 安装脚本"
 	@cp scripts/README.md dist/$(DIST_NAME)/
 	@echo "✓ 说明文档"
-	@# 创建配置模板
-	@mkdir -p dist/$(DIST_NAME)/share/config
-	@echo '[server]' > dist/$(DIST_NAME)/share/config/claw-one.toml.template
-	@echo 'host = "0.0.0.0"' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
-	@echo 'port = 8080' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
-	@echo 'log_level = "info"' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
-	@echo '' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
-	@echo '[openclaw]' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
-	@echo 'openclaw_home = "~/.openclaw"' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@printf '%s\n' '[server]' 'host = "0.0.0.0"' 'port = 8080' 'log_level = "info"' '' '[openclaw]' 'openclaw_home = "~/.openclaw"' 'service_name = "openclaw"' 'health_port = 18790' 'health_timeout = 30' > dist/$(DIST_NAME)/share/config/claw-one.toml.template
 	@echo "✓ 配置模板"
 	@cd dist && tar czf $(DIST_NAME).tar.gz $(DIST_NAME)/
+	@rm -rf dist/$(DIST_NAME)
 	@echo ""
 	@echo "✅ 安装包已创建: dist/$(DIST_NAME).tar.gz"
 	@echo ""
