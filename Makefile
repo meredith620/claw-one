@@ -92,6 +92,16 @@ dist: build
 	@echo "✓ 安装脚本"
 	@cp scripts/README.md dist/$(DIST_NAME)/
 	@echo "✓ 说明文档"
+	@# 创建配置模板
+	@mkdir -p dist/$(DIST_NAME)/share/config
+	@echo '[server]' > dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo 'host = "0.0.0.0"' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo 'port = 8080' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo 'log_level = "info"' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo '' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo '[openclaw]' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo 'openclaw_home = "~/.openclaw"' >> dist/$(DIST_NAME)/share/config/claw-one.toml.template
+	@echo "✓ 配置模板"
 	@cd dist && tar czf $(DIST_NAME).tar.gz $(DIST_NAME)/
 	@echo ""
 	@echo "✅ 安装包已创建: dist/$(DIST_NAME).tar.gz"
