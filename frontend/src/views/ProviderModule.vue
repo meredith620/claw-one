@@ -116,6 +116,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getProviders, saveProvider, deleteProvider, getModelPriority, saveModelPriority } from '../api'
+import { useConfigValidation } from '../composables/useConfigValidation'
 
 const providerTypes = [
   { id: 'moonshot', name: 'Moonshot', icon: '🌙' },
@@ -126,6 +127,9 @@ const providerTypes = [
 const loading = ref(false)
 const saving = ref(false)
 const savingPriority = ref(false)
+
+// 配置验证
+const { validating, validateAndShow } = useConfigValidation()
 const currentType = ref('moonshot')
 const isEditing = ref(false)
 
@@ -300,6 +304,26 @@ const saveInstance = async () => {
       baseUrl: baseUrls[currentType.value]?.[formData.version] || baseUrls[currentType.value]?.default || '',
       defaultModel: formData.defaultModel,
       api: currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-completions',
+    }
+
+    // 构建完整配置进行验证
+    const allProviders: Record<string, any> = {}
+    Object.values(instances).flat().forEach((inst: any) => {
+      allProviders[inst.id] = inst
+    })
+    allProviders[id] = data
+
+    const configToValidate = {
+      models: { providers: allProviders },
+      agents: { defaults: { workspace: '~/.openclaw/workspace', agentDir: '~/.openclaw/agent' } },
+      channels: {}
+    }
+
+    // 验证配置
+    const isValid = await validateAndShow(configToValidate)
+    if (!isValid) {
+      saving.value = false
+      return
     }
 
     await saveProvider(id, data)

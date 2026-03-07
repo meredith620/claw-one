@@ -50,8 +50,8 @@ export const rollback = (data: { snapshot_id: string }) =>
   api.post('/rollback', data)
 
 // 配置验证
-export const validateConfig = (data: { config: any }) =>
-  api.post('/config/validate', data)
+export const validateConfig = (config: any) =>
+  api.post('/config/validate', { config })
 
 // 重启
 export const restartService = () => api.post('/restart')

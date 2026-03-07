@@ -18,6 +18,7 @@ mod runtime;
 mod settings;
 mod state;
 mod types;
+mod validation;
 
 use config::ConfigManager;
 use settings::Settings;
@@ -170,7 +171,8 @@ async fn run_server() {
         // Channel 配置 API
         .route("/api/channels", get(api::channels::get_channels))
         .route("/api/channels", post(api::channels::save_channels))
-        // 其他 API
+        // 配置验证 API
+        .route("/api/config/validate", post(api::config::validate_handler))
         .route("/api/snapshots", get(api::snapshots::handler))
         .route("/api/rollback", post(api::rollback::handler))
         .route("/api/logs", get(api::logs::handler))
