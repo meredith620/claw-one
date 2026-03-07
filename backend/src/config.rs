@@ -23,9 +23,13 @@ pub struct ConfigManager {
 
 impl ConfigManager {
     pub fn new() -> Self {
-        let config_path = std::env::var("CLAW_ONE_CONFIG")
+        // 首先尝试从 CLAW_OPENCLAW_CONFIG 获取（专门用于 openclaw.json）
+        // 否则从 Settings 的 openclaw_home 推导
+        let config_path = std::env::var("CLAW_OPENCLAW_CONFIG")
             .map(PathBuf::from)
             .unwrap_or_else(|_| {
+                // 从 CLAW_ONE_CONFIG 所在的目录推导
+                // 或者使用默认路径
                 dirs::home_dir()
                     .expect("No home directory")
                     .join(".openclaw")
@@ -328,7 +332,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    async fn git_add(&self, path: &str) -> Result<()> {
+    pub async fn git_add(&self, path: &str) -> Result<()> {
         let output = Command::new("git")
             .args([
                 "-C", self.git_dir.to_str().unwrap(),
@@ -346,7 +350,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    async fn git_commit(&self, message: &str) -> Result<String> {
+    pub async fn git_commit(&self, message: &str) -> Result<String> {
         let output = Command::new("git")
             .args([
                 "-C", self.git_dir.to_str().unwrap(),
@@ -376,7 +380,7 @@ impl ConfigManager {
         Ok(commit_id)
     }
 
-    async fn has_changes(&self) -> Result<bool> {
+    pub async fn has_changes(&self) -> Result<bool> {
         let output = Command::new("git")
             .args([
                 "-C", self.git_dir.to_str().unwrap(),
@@ -392,53 +396,58 @@ impl ConfigManager {
     // ==================== 模块级配置方法 ====================
 
     /// 获取 Provider 模块配置
-    pub async fn get_providers(&self,
-    ) -> Result<Vec<serde_json::Value>> {
+    pub async fn get_providers(&self) -> Result<Vec<serde_json::Value>> {
         let config = self.get_config().await?;
         
-        let providers = config
+        // 尝试从 models.providers 获取
+        if let Some(providers_obj) = config
             .get("models")
             .and_then(|m| m.get("providers"))
             .and_then(|p| p.as_object())
-            .map(|obj| {
-                obj.iter()
-                    .map(|(id, value)| {
-                        let version = if id.starts_with("moonshot-") {
-                            value.get("baseUrl")
-                                .and_then(|u| u.as_str())
-                                .map(|url| {
-                                    if url.contains("kimi.com") {
-                                        "coding"
-                                    } else if url.contains("moonshot.cn") {
-                                        "cn"
-                                    } else {
-                                        "ai"
-                                    }
-                                })
-                                .map(|s| s.to_string())
-                        } else {
-                            None
-                        };
+        {
+            let providers: Vec<serde_json::Value> = providers_obj
+                .iter()
+                .map(|(id, value)| {
+                    let version = if id.starts_with("moonshot-") {
+                        value.get("baseUrl")
+                            .and_then(|u| u.as_str())
+                            .map(|url| {
+                                if url.contains("kimi.com") {
+                                    "coding"
+                                } else if url.contains("moonshot.cn") {
+                                    "cn"
+                                } else {
+                                    "ai"
+                                }
+                            })
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    };
 
-                        serde_json::json!({
-                            "id": id,
-                            "version": version,
-                            "enabled": value.get("enabled")
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(true),
-                            "apiKey": value.get("apiKey"),
-                            "baseUrl": value.get("baseUrl"),
-                            "defaultModel": value.get("models")
-                                .and_then(|m| m.as_array())
-                                .and_then(|arr| arr.first())
-                                .and_then(|m| m.get("id")),
-                        })
+                    serde_json::json!({
+                        "id": id,
+                        "version": version,
+                        "enabled": value.get("enabled")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true),
+                        "apiKey": value.get("apiKey").cloned().unwrap_or(serde_json::Value::Null),
+                        "baseUrl": value.get("baseUrl").cloned().unwrap_or(serde_json::Value::Null),
+                        "defaultModel": value.get("models")
+                            .and_then(|m| m.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|m| m.get("id"))
+                            .cloned()
+                            .or_else(|| value.get("defaultModel").cloned()),
                     })
-                    .collect()
-            })
-            .unwrap_or_default();
+                })
+                .collect();
+            
+            return Ok(providers);
+        }
         
-        Ok(providers)
+        // 返回空数组
+        Ok(vec![])
     }
 
     /// 保存 Provider 实例
@@ -482,6 +491,171 @@ impl ConfigManager {
         self.save_config(&config).await?;
         Ok(())
     }
+
+    /// 获取模型优先级
+    pub async fn get_model_priority(&self) -> Result<ModelPriority> {
+        let config = self.get_config().await?;
+        
+        let primary = config
+            .get("agents")
+            .and_then(|a| a.get("defaults"))
+            .and_then(|d| d.get("model"))
+            .and_then(|m| m.get("primary"))
+            .and_then(|p| p.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        
+        let fallbacks: Vec<String> = config
+            .get("agents")
+            .and_then(|a| a.get("defaults"))
+            .and_then(|d| d.get("model"))
+            .and_then(|m| m.get("fallbacks"))
+            .and_then(|f| f.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        
+        Ok(ModelPriority { primary, fallbacks })
+    }
+
+    /// 保存模型优先级
+    pub async fn save_model_priority(
+        &self,
+        primary: &str,
+        fallbacks: &[String],
+    ) -> Result<()> {
+        let mut config = self.get_config().await?;
+        
+        // 确保 agents.defaults.model 路径存在
+        if config.get("agents").is_none() {
+            config["agents"] = serde_json::json!({});
+        }
+        if config["agents"].get("defaults").is_none() {
+            config["agents"]["defaults"] = serde_json::json!({});
+        }
+        if config["agents"]["defaults"].get("model").is_none() {
+            config["agents"]["defaults"]["model"] = serde_json::json!({});
+        }
+        
+        config["agents"]["defaults"]["model"]["primary"] = serde_json::Value::String(primary.to_string());
+        config["agents"]["defaults"]["model"]["fallbacks"] = 
+            serde_json::Value::Array(fallbacks.iter().map(|s| serde_json::Value::String(s.clone())).collect());
+        
+        self.save_config(&config).await?;
+        Ok(())
+    }
+
+    // ==================== Agent 模块配置方法 ====================
+
+    /// 获取 Agent 模块配置
+    pub async fn get_agents(&self) -> Result<serde_json::Value> {
+        let config = self.get_config().await?;
+        
+        let agents = config
+            .get("agents")
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "defaults": {
+                        "workspace": "~/.openclaw/workspace",
+                        "agentDir": "~/.openclaw/agent",
+                    },
+                    "list": [],
+                })
+            });
+        
+        Ok(agents)
+    }
+
+    /// 保存 Agent 模块配置
+    pub async fn save_agents(&self, agents: &serde_json::Value) -> Result<()> {
+        let mut config = self.get_config().await?;
+        config["agents"] = agents.clone();
+        self.save_config(&config).await?;
+        Ok(())
+    }
+
+    // ==================== Memory 模块配置方法 ====================
+
+    /// 获取 Memory 模块配置
+    pub async fn get_memory(&self) -> Result<serde_json::Value> {
+        let config = self.get_config().await?;
+        
+        let memory = config
+            .get("agents")
+            .and_then(|a| a.get("defaults"))
+            .and_then(|d| d.get("memorySearch"))
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "enabled": true,
+                    "provider": "ollama",
+                    "remote": {
+                        "baseUrl": "http://localhost:11434"
+                    },
+                    "model": "qwen3-embedding:0.6b",
+                })
+            });
+        
+        Ok(memory)
+    }
+
+    /// 保存 Memory 模块配置
+    pub async fn save_memory(&self, memory: &serde_json::Value) -> Result<()> {
+        let mut config = self.get_config().await?;
+        
+        // 确保 agents.defaults 路径存在
+        if config.get("agents").is_none() {
+            config["agents"] = serde_json::json!({});
+        }
+        if config["agents"].get("defaults").is_none() {
+            config["agents"]["defaults"] = serde_json::json!({});
+        }
+        
+        config["agents"]["defaults"]["memorySearch"] = memory.clone();
+        self.save_config(&config).await?;
+        Ok(())
+    }
+
+    // ==================== Channel 模块配置方法 ====================
+
+    /// 获取 Channel 模块配置
+    pub async fn get_channels(&self) -> Result<serde_json::Value> {
+        let config = self.get_config().await?;
+        
+        let channels = config
+            .get("channels")
+            .cloned()
+            .unwrap_or_else(|| {
+                serde_json::json!({
+                    "mattermost": {
+                        "enabled": false,
+                        "dmPolicy": "pairing",
+                        "accounts": {}
+                    }
+                })
+            });
+        
+        Ok(channels)
+    }
+
+    /// 保存 Channel 模块配置
+    pub async fn save_channels(&self, channels: &serde_json::Value) -> Result<()> {
+        let mut config = self.get_config().await?;
+        config["channels"] = channels.clone();
+        self.save_config(&config).await?;
+        Ok(())
+    }
+}
+
+/// 模型优先级
+#[derive(Debug)]
+pub struct ModelPriority {
+    pub primary: String,
+    pub fallbacks: Vec<String>,
 }
 
 #[cfg(test)]

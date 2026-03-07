@@ -1,5 +1,8 @@
+pub mod agents;
+pub mod channels;
 pub mod config;
 pub mod logs;
+pub mod memory;
 pub mod providers;
 pub mod restart;
 pub mod rollback;

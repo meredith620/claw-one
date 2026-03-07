@@ -1,0 +1,37 @@
+{
+  "agents": {
+    "defaults": {
+      "agentDir": "~/.openclaw/agent",
+      "memorySearch": {
+        "enabled": true,
+        "model": "qwen3-embedding:0.6b",
+        "provider": "ollama",
+        "remote": {
+          "baseUrl": "http://localhost:11434"
+        }
+      },
+      "workspace": "~/.openclaw/workspace"
+    }
+  },
+  "channels": {
+    "mattermost": {
+      "accounts": {},
+      "dmPolicy": "pairing",
+      "enabled": false
+    }
+  },
+  "models": {
+    "providers": {
+      "moonshot-work": {
+        "api": "openai-completions",
+        "apiKey": "sk-test123",
+        "baseUrl": "https://api.kimi.com/coding/",
+        "defaultModel": "kimi-k2.5",
+        "enabled": true,
+        "id": "moonshot-work",
+        "name": "work",
+        "version": "coding"
+      }
+    }
+  }
+}

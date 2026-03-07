@@ -178,10 +178,13 @@ impl Settings {
     /// 获取静态文件目录
     pub fn static_dir(&self) -> PathBuf {
         if self.paths.static_dir.is_empty() {
-            // 默认使用相对路径
-            std::env::current_dir()
-                .map(|d| d.join("..").join("static").join("dist"))
-                .unwrap_or_else(|_| PathBuf::from("../static/dist"))
+            // 默认使用相对路径 - 从backend目录出发
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.parent().map(|d2| d2.to_path_buf())))
+                .flatten()
+                .map(|d| d.join("static").join("dist"))
+                .unwrap_or_else(|| PathBuf::from("../static/dist"))
         } else {
             expand_path(&self.paths.static_dir)
         }

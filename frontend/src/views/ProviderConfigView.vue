@@ -1,5 +1,6 @@
 <template>
-  <div class="provider-config">
+  <div class="provider-config" v-loading="loading">
+    <!-- 左侧 Provider 类型列表 -->
     <div class="provider-sidebar">
       <h3>🧠 Provider 配置</h3>
       <div class="provider-types">
@@ -17,11 +18,13 @@
       </div>
     </div>
 
+    <!-- 右侧配置详情 -->
     <div class="provider-content">
+      <!-- Provider 实例列表 -->
       <div v-if="selectedType" class="instance-section">
         <div class="section-header">
           <h4>{{ getTypeName(selectedType) }} 实例</h4>
-          <el-button type="primary" size="small" @click="showAddDialog = true">
+          <el-button type="primary" size="small" @click="openAddDialog">
             <el-icon><Plus /></el-icon>
             添加实例
           </el-button>
@@ -56,8 +59,12 @@
         </div>
       </div>
 
+      <!-- 模型优先级设置 -->
       <div class="model-priority">
-        <h4>模型优先级设置</h4>
+        <div class="priority-header">
+          <h4>模型优先级设置</h4>
+          <el-button type="primary" size="small" @click="savePriority">保存优先级</el-button>
+        </div>
         <div class="priority-list">
           <div class="priority-item">
             <label>Primary (主模型):</label>
@@ -126,7 +133,7 @@
       </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="addInstance">保存</el-button>
+        <el-button type="primary" @click="addInstance" :loading="saving">保存</el-button>
       </template>
     </el-dialog>
 
@@ -152,16 +159,17 @@
       </el-form>
       <template #footer>
         <el-button @click="showEditDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveInstance">保存</el-button>
+        <el-button type="primary" @click="saveInstance" :loading="saving">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import { getProviders, saveProvider, deleteProvider as apiDeleteProvider, getModelPriority, saveModelPriority } from '../api'
 
 const providerTypes = [
   { id: 'moonshot', name: 'Moonshot', icon: '🌙' },
@@ -172,25 +180,17 @@ const providerTypes = [
 const selectedType = ref('moonshot')
 const showAddDialog = ref(false)
 const showEditDialog = ref(false)
+const loading = ref(false)
+const saving = ref(false)
 
 const instances = reactive<Record<string, any[]>>({
-  moonshot: [
-    { 
-      id: 'moonshot-work', 
-      name: 'work',
-      version: 'ai',
-      enabled: true, 
-      apiKey: 'sk-xxx',
-      baseUrl: 'https://api.moonshot.ai/v1',
-      defaultModel: 'kimi-k2.5'
-    },
-  ],
+  moonshot: [],
   openai: [],
   anthropic: [],
 })
 
 const modelPriority = reactive({
-  primary: 'moonshot-work/kimi-k2.5',
+  primary: '',
   fallbacks: ['']
 })
 
@@ -205,18 +205,40 @@ const editingInstance = ref<any>(null)
 
 const availableModels = computed(() => {
   const models: { value: string; label: string }[] = []
-  Object.entries(instances).forEach(([type, typeInstances]) => {
-    typeInstances.forEach(inst => {
-      if (inst.enabled) {
-        models.push({
-          value: `${inst.id}/${inst.defaultModel}`,
-          label: `${inst.id} - ${inst.defaultModel}`
-        })
-      }
-    })
+  Object.values(instances).flat().forEach((inst: any) => {
+    if (inst.enabled && inst.defaultModel) {
+      models.push({
+        value: `${inst.id}/${inst.defaultModel}`,
+        label: `${inst.id} - ${inst.defaultModel}`
+      })
+    }
   })
   return models
 })
+
+const loadData = async () => {
+  loading.value = true
+  try {
+    const [providersRes, priorityRes] = await Promise.all([
+      getProviders(),
+      getModelPriority()
+    ])
+    
+    const providers = providersRes.data || []
+    instances.moonshot = providers.filter((p: any) => p.id?.startsWith('moonshot-'))
+    instances.openai = providers.filter((p: any) => p.id?.startsWith('openai-'))
+    instances.anthropic = providers.filter((p: any) => p.id?.startsWith('anthropic-'))
+    
+    modelPriority.primary = priorityRes.data.primary || ''
+    modelPriority.fallbacks = priorityRes.data.fallbacks?.length > 0 
+      ? priorityRes.data.fallbacks 
+      : ['']
+  } catch (error: any) {
+    ElMessage.error('加载数据失败: ' + (error.response?.data?.error || error.message))
+  } finally {
+    loading.value = false
+  }
+}
 
 const getInstanceCount = (typeId: string) => instances[typeId]?.length || 0
 const getInstances = (typeId: string) => instances[typeId] || []
@@ -241,31 +263,52 @@ const getModelOptions = (typeId: string) => {
   return options[typeId] || []
 }
 
-const addInstance = () => {
+const openAddDialog = () => {
+  newInstance.name = ''
+  newInstance.apiKey = ''
+  newInstance.defaultModel = ''
+  newInstance.version = 'coding'
+  showAddDialog.value = true
+}
+
+const addInstance = async () => {
   if (!newInstance.name) { ElMessage.error('请输入实例名称'); return }
   if (!newInstance.apiKey) { ElMessage.error('请输入 API Key'); return }
   if (!newInstance.defaultModel) { ElMessage.error('请选择默认模型'); return }
 
   const id = `${selectedType.value}-${newInstance.name}`
-  const exists = Object.values(instances).flat().some(i => i.id === id)
-  if (exists) { ElMessage.error(`Provider ID "${id}" 已存在`); return }
+  saving.value = true
+  
+  try {
+    const baseUrls: Record<string, Record<string, string>> = {
+      moonshot: { 
+        coding: 'https://api.kimi.com/coding/', 
+        ai: 'https://api.moonshot.ai/v1', 
+        cn: 'https://api.moonshot.cn/v1' 
+      },
+      openai: { default: 'https://api.openai.com/v1' },
+      anthropic: { default: 'https://api.anthropic.com/v1' },
+    }
 
-  const baseUrls: Record<string, Record<string, string>> = {
-    moonshot: { coding: 'https://api.kimi.com/coding/', ai: 'https://api.moonshot.ai/v1', cn: 'https://api.moonshot.cn/v1' },
-    openai: { default: 'https://api.openai.com/v1' },
-    anthropic: { default: 'https://api.anthropic.com/v1' },
+    const data = {
+      id,
+      name: newInstance.name,
+      version: selectedType.value === 'moonshot' ? newInstance.version : undefined,
+      enabled: true,
+      apiKey: newInstance.apiKey,
+      baseUrl: baseUrls[selectedType.value][newInstance.version] || baseUrls[selectedType.value].default,
+      defaultModel: newInstance.defaultModel,
+    }
+
+    await saveProvider(id, data)
+    ElMessage.success(`实例 "${id}" 添加成功`)
+    showAddDialog.value = false
+    await loadData()
+  } catch (error: any) {
+    ElMessage.error('添加失败: ' + (error.response?.data?.error || error.message))
+  } finally {
+    saving.value = false
   }
-
-  instances[selectedType.value].push({
-    id, name: newInstance.name, version: selectedType.value === 'moonshot' ? newInstance.version : undefined,
-    enabled: true, apiKey: newInstance.apiKey,
-    baseUrl: baseUrls[selectedType.value][newInstance.version] || baseUrls[selectedType.value].default,
-    defaultModel: newInstance.defaultModel,
-  })
-
-  ElMessage.success(`实例 "${id}" 添加成功`)
-  showAddDialog.value = false
-  newInstance.name = ''; newInstance.apiKey = ''; newInstance.defaultModel = ''; newInstance.version = 'coding'
 }
 
 const editInstance = (instance: any) => {
@@ -273,29 +316,54 @@ const editInstance = (instance: any) => {
   showEditDialog.value = true
 }
 
-const saveInstance = () => {
+const saveInstance = async () => {
   if (!editingInstance.value) return
-  const idx = instances[selectedType.value].findIndex(i => i.id === editingInstance.value.id)
-  if (idx !== -1) {
-    instances[selectedType.value][idx] = { ...editingInstance.value }
+  saving.value = true
+  try {
+    await saveProvider(editingInstance.value.id, editingInstance.value)
     ElMessage.success('配置已保存')
     showEditDialog.value = false
+    await loadData()
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
+  } finally {
+    saving.value = false
   }
 }
 
 const deleteInstance = async (instance: any) => {
   try {
     await ElMessageBox.confirm(`确定删除实例 "${instance.id}" 吗？`, '确认删除', { type: 'warning' })
-    const idx = instances[selectedType.value].findIndex(i => i.id === instance.id)
-    if (idx !== -1) {
-      instances[selectedType.value].splice(idx, 1)
-      ElMessage.success('实例已删除')
+    await apiDeleteProvider(instance.id)
+    ElMessage.success('实例已删除')
+    await loadData()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除失败: ' + (error.response?.data?.error || error.message))
     }
-  } catch { /* cancelled */ }
+  }
 }
 
-const addFallback = () => { if (modelPriority.fallbacks.length < 3) modelPriority.fallbacks.push('') }
-const removeFallback = (index: number) => { modelPriority.fallbacks.splice(index, 1) }
+const savePriority = async () => {
+  try {
+    await saveModelPriority({
+      primary: modelPriority.primary,
+      fallbacks: modelPriority.fallbacks.filter(f => f && f !== '')
+    })
+    ElMessage.success('模型优先级已保存')
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
+  }
+}
+
+const addFallback = () => { 
+  if (modelPriority.fallbacks.length < 3) modelPriority.fallbacks.push('') 
+}
+const removeFallback = (index: number) => { 
+  modelPriority.fallbacks.splice(index, 1) 
+}
+
+onMounted(loadData)
 </script>
 
 <style scoped>
@@ -432,8 +500,15 @@ const removeFallback = (index: number) => { modelPriority.fallbacks.splice(index
   padding: 20px;
 }
 
-.model-priority h4 {
-  margin: 0 0 20px 0;
+.priority-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.priority-header h4 {
+  margin: 0;
 }
 
 .priority-list {

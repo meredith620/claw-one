@@ -7,7 +7,6 @@ use std::sync::Arc;
 use crate::{
     config::ConfigManager,
     error::{AppError, Result},
-    types::Config,
 };
 
 /// 获取所有 Provider 实例

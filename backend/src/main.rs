@@ -1,5 +1,5 @@
 use axum::{
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
     response::Json,
 };
@@ -161,6 +161,15 @@ async fn run_server() {
         .route("/api/providers/:id", delete(api::providers::delete_provider))
         .route("/api/model-priority", get(api::providers::get_model_priority))
         .route("/api/model-priority", post(api::providers::save_model_priority))
+        // Agent 配置 API
+        .route("/api/agents", get(api::agents::get_agents))
+        .route("/api/agents", post(api::agents::save_agents))
+        // Memory 配置 API
+        .route("/api/memory", get(api::memory::get_memory))
+        .route("/api/memory", post(api::memory::save_memory))
+        // Channel 配置 API
+        .route("/api/channels", get(api::channels::get_channels))
+        .route("/api/channels", post(api::channels::save_channels))
         // 其他 API
         .route("/api/snapshots", get(api::snapshots::handler))
         .route("/api/rollback", post(api::rollback::handler))

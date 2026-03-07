@@ -1,149 +1,132 @@
 <template>
   <div class="safe-mode-view">
-    <el-result
-      icon="warning"
-      title="Safe Mode"
-      :sub-title="errorMessage"
-      status="warning"
-    >
+    <el-result icon="warning" :title="title" :sub-title="subTitle" status="warning">
       <template #extra>
-        <!-- 配置错误场景（已回滚）-->
-        <el-row v-if="isConfigError && autoRolledBack" :gutter="10">
-          <el-col>
-            <el-button type="primary" @click="goToConfig">重新编辑配置</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showLogs">查看日志</el-button>
-          </el-col>
-          <el-col>
-            <el-dropdown>
-              <el-button>更多操作</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="forceApply">强制使用新配置</el-dropdown-item>
-                  <el-dropdown-item divided type="danger" @click="resetToFactory"
-                    >恢复出厂设置</el-dropdown-item
-                  >
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </el-col>
-        </el-row>
-
-        <!-- 配置错误场景（未回滚）-->
-        <el-row v-else-if="isConfigError && !autoRolledBack" :gutter="10">
-          <el-col>
-            <el-button type="primary" @click="goToConfig">重新编辑配置</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showSnapshots">回滚到历史版本</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showLogs">查看日志</el-button>
-          </el-col>
-        </el-row>
+        <!-- 配置错误场景 -->
+        <template v-if="isConfigError">
+          <div class="action-desc">
+            <p><strong>配置验证失败，OpenClaw 无法启动。</strong></p>
+            <p>你可以选择：</p>
+            <ul class="option-list">
+              <li>📝 在 Safe Mode 下继续编辑配置并修复问题</li>
+              <li>⏪ 回滚到上一个工作版本</li>
+              <li>🏭 恢复出厂设置</li>
+            </ul>
+          </div>
+          <el-row :gutter="10" class="actions">
+            <el-col>
+              <el-button type="primary" size="large" @click="goToConfig">
+                <el-icon><Edit /></el-icon> 继续编辑配置
+              </el-button>
+            </el-col>
+            <el-col>
+              <el-button size="large" @click="showSnapshots">
+                <el-icon><RefreshLeft /></el-icon> 回滚到历史版本
+              </el-button>
+            </el-col>
+            <el-col>
+              <el-button size="large" @click="showLogs">
+                <el-icon><Document /></el-icon> 查看日志
+              </el-button>
+            </el-col>
+          </el-row>
+          <div class="danger-actions">
+            <el-button link type="danger" @click="resetToFactory"><el-icon><Delete /></el-icon> 恢复出厂设置</el-button>
+          </div>
+        </template>
 
         <!-- 系统错误场景 -->
-        <el-row v-else-if="isSystemError" :gutter="10">
-          <el-col>
-            <el-button type="primary" @click="goToConfig">重新编辑配置</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showSnapshots">回滚到历史版本</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showLogs">查看日志</el-button>
-          </el-col>
-        </el-row>
-
-        <!-- 手动触发 SafeMode -->
-        <el-row v-else :gutter="10">
-          <el-col>
-            <el-button type="primary" @click="recover">尝试恢复</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showSnapshots">回滚到历史版本</el-button>
-          </el-col>
-          <el-col>
-            <el-button @click="showLogs">查看日志</el-button>
-          </el-col>
-        </el-row>
+        <template v-else-if="isSystemError">
+          <div class="action-desc">
+            <p>检测到系统错误，这可能是由于资源不足或依赖服务异常导致的。</p>
+          </div>
+          <el-row :gutter="10" class="actions">
+            <el-col>
+              <el-button type="primary" size="large" @click="recover">
+                <el-icon><Refresh /></el-icon> 尝试恢复
+              </el-button>
+            </el-col>
+            <el-col>
+              <el-button size="large" @click="showLogs">
+                <el-icon><Document /></el-icon> 查看日志
+              </el-button>
+            </el-col>
+          </el-row>
+        </template>
       </template>
     </el-result>
 
-    <!-- 日志对话框 -->
-    <el-dialog v-model="logsVisible" title="服务日志" width="800px">
-      <pre class="logs-content">{{ logs }}</pre>
-      <template #footer>
-        <el-button @click="logsVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
-
     <!-- 历史版本对话框 -->
-    <el-dialog v-model="snapshotsVisible" title="历史版本" width="600px">
-      <el-table :data="snapshots" v-loading="loadingSnapshots">
-        <el-table-column prop="timestamp" label="时间" width="180" />
-        <el-table-column prop="message" label="提交信息" />
-        <el-table-column label="操作" width="100">
-          <template #default="{ row }">
-            <el-button size="small" type="danger" @click="confirmRollback(row)"
-              >回滚</el-button
-            >
+    <el-dialog v-model="snapshotsVisible" title="历史版本 - 选择回滚目标" width="700px">
+      <div class="snapshot-desc">
+        <p>选择一个历史版本回滚，回滚后会自动重启服务。</p>
+      </div>
+      <el-table :data="snapshots" v-loading="loadingSnapshots" class="snapshot-table">
+        <el-table-column type="index" width="50" />
+        <el-table-column label="时间" width="180">
+          <template #default="{ row }">{{ formatTime(row.timestamp) }}</template>
+        </el-table-column>
+        <el-table-column prop="message" label="提交信息" show-overflow-tooltip />
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row, $index }">
+            <el-button size="small" :type="$index === 0 ? 'primary' : 'danger'" @click="confirmRollback(row)">
+              {{ $index === 0 ? '恢复' : '回滚' }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
+    </el-dialog>
+
+    <!-- 日志对话框 -->
+    <el-dialog v-model="logsVisible" title="服务日志" width="900px">
+      <div class="logs-toolbar">
+        <el-button size="small" @click="refreshLogs"><el-icon><Refresh /></el-icon> 刷新</el-button>
+        <el-button size="small" @click="copyLogs"><el-icon><CopyDocument /></el-icon> 复制</el-button>
+      </div>
+      <pre class="logs-content">{{ logs || '暂无日志' }}</pre>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Edit, RefreshLeft, Document, Refresh, CopyDocument, Delete } from '@element-plus/icons-vue'
 import { getState, getLogs, getSnapshots, rollback, restartService, resetToFactory as apiResetToFactory } from '../api'
 import type { StateResponse, Snapshot } from '../types'
 
 const router = useRouter()
 
-// 状态数据
 const stateData = ref<StateResponse | null>(null)
 const logs = ref('')
 const logsVisible = ref(false)
 const snapshots = ref<Snapshot[]>([])
 const snapshotsVisible = ref(false)
 const loadingSnapshots = ref(false)
+let stateTimer: number | null = null
 
-// 计算属性
-const errorMessage = computed(() => {
-  if (!stateData.value?.last_error) {
-    return '系统处于安全模式，请检查配置或查看日志'
-  }
-  return stateData.value.last_error
+const title = computed(() => {
+  if (isConfigError.value) return 'Safe Mode - 配置错误'
+  if (isSystemError.value) return 'Safe Mode - 系统错误'
+  return 'Safe Mode'
 })
 
-const isConfigError = computed(() => {
-  return stateData.value?.state.type === 'config_error'
+const subTitle = computed(() => {
+  return stateData.value?.last_error || 'OpenClaw 服务未正常运行'
 })
 
-const isSystemError = computed(() => {
-  return stateData.value?.state.type === 'system_error'
-})
+const isConfigError = computed(() => stateData.value?.state.type === 'config_error')
+const isSystemError = computed(() => stateData.value?.state.type === 'system_error')
 
-const autoRolledBack = computed(() => {
-  const state = stateData.value?.state
-  if (state?.type === 'config_error') {
-    return state.auto_rolled_back
-  }
-  return false
-})
+const formatTime = (timestamp: string) => {
+  return new Date(timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
-// 获取状态
 const fetchState = async () => {
   try {
     const response = await getState()
     stateData.value = response.data
-
-    // 如果状态正常，跳转到状态页面
     if (stateData.value?.state.type === 'running') {
       router.push('/status')
     }
@@ -152,153 +135,85 @@ const fetchState = async () => {
   }
 }
 
-// 显示日志
 const showLogs = async () => {
-  try {
-    const response = await getLogs()
-    logs.value = response.data.logs || '暂无日志'
-    logsVisible.value = true
-  } catch (error) {
-    ElMessage.error('获取日志失败')
-  }
+  await refreshLogs()
+  logsVisible.value = true
 }
 
-// 显示历史版本
+const refreshLogs = async () => {
+  const response = await getLogs()
+  logs.value = response.data.logs || '暂无日志'
+}
+
+const copyLogs = () => {
+  navigator.clipboard.writeText(logs.value).then(() => ElMessage.success('已复制')).catch(() => ElMessage.error('复制失败'))
+}
+
 const showSnapshots = async () => {
   snapshotsVisible.value = true
   loadingSnapshots.value = true
   try {
     const response = await getSnapshots()
-    snapshots.value = response.data.snapshots
-  } catch (error) {
-    ElMessage.error('获取历史版本失败')
+    snapshots.value = response.data.snapshots || []
   } finally {
     loadingSnapshots.value = false
   }
 }
 
-// 确认回滚
 const confirmRollback = async (snapshot: Snapshot) => {
   try {
-    await ElMessageBox.confirm(
-      `确定要回滚到版本 ${snapshot.id.slice(0, 8)} 吗？`,
-      '确认回滚',
-      {
-        confirmButtonText: '确定回滚',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-
+    await ElMessageBox.confirm(`确定要回滚到 ${formatTime(snapshot.timestamp)} 的版本吗？`, '确认回滚', { type: 'warning' })
     await rollback({ snapshot_id: snapshot.id })
     ElMessage.success('回滚成功，正在重启服务...')
     snapshotsVisible.value = false
-
-    // 等待几秒后检查状态
-    setTimeout(() => {
-      fetchState()
-    }, 5000)
+    setTimeout(fetchState, 5000)
   } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error('回滚失败')
-    }
+    if (error !== 'cancel') ElMessage.error('回滚失败')
   }
 }
 
-// 跳转配置
-const goToConfig = () => {
-  router.push('/config')
-}
+const goToConfig = () => router.push('/config')
 
-// 强制使用新配置
-const forceApply = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '强制使用新配置可能导致服务无法启动，确定继续吗？',
-      '警告',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-
-    // TODO: 实现强制应用逻辑
-    ElMessage.info('功能开发中...')
-  } catch (error) {
-    // 取消
-  }
-}
-
-// 恢复出厂设置
-const resetToFactory = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '恢复出厂设置将清除所有配置并重启服务，确定继续吗？',
-      '警告',
-      {
-        confirmButtonText: '确定恢复',
-        cancelButtonText: '取消',
-        type: 'danger',
-      }
-    )
-
-    const response = await apiResetToFactory()
-    ElMessage.success('已恢复出厂设置，正在重启服务...')
-
-    // 等待几秒后检查状态
-    setTimeout(() => {
-      fetchState()
-    }, 5000)
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error('恢复出厂设置失败')
-    }
-  }
-}
-
-// 尝试恢复
 const recover = async () => {
   try {
     await restartService()
-    ElMessage.success('恢复指令已发送，请稍候...')
-
-    // 等待几秒后检查状态
-    setTimeout(() => {
-      fetchState()
-    }, 5000)
-  } catch (error) {
+    ElMessage.success('恢复指令已发送')
+    setTimeout(fetchState, 5000)
+  } catch {
     ElMessage.error('恢复失败')
   }
 }
 
-// 生命周期
+const resetToFactory = async () => {
+  try {
+    await ElMessageBox.confirm('恢复出厂设置将清除所有配置，确定继续吗？', '警告', { type: 'danger' })
+    await apiResetToFactory()
+    ElMessage.success('已恢复出厂设置')
+    setTimeout(fetchState, 5000)
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error('恢复失败')
+  }
+}
+
 onMounted(() => {
   fetchState()
-  // 每 5 秒刷新状态
-  const timer = setInterval(fetchState, 5000)
-  return () => clearInterval(timer)
+  stateTimer = window.setInterval(fetchState, 5000)
+})
+
+onUnmounted(() => {
+  if (stateTimer) clearInterval(stateTimer)
 })
 </script>
 
 <style scoped>
-.safe-mode-view {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 40px 20px;
-}
-
-.logs-content {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  padding: 15px;
-  border-radius: 4px;
-  max-height: 400px;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
+.safe-mode-view { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+.action-desc { text-align: left; margin: 20px 0; color: #606266; }
+.action-desc ul { margin: 10px 0; padding-left: 20px; }
+.action-desc li { margin: 5px 0; }
+.actions { margin-top: 20px; }
+.danger-actions { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e4e7ed; }
+.snapshot-desc { margin-bottom: 15px; color: #606266; }
+.snapshot-table { margin-top: 10px; }
+.logs-toolbar { margin-bottom: 10px; }
+.logs-content { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
 </style>

@@ -7,7 +7,7 @@ export type OpenClawState =
   | { type: 'starting' }
   | { type: 'stopped' }
   | { type: 'unknown' }
-  | { type: 'config_error'; error: string; auto_rolled_back: boolean }
+  | { type: 'config_error'; error: string }
   | { type: 'system_error'; error: string }
 
 export interface StateResponse {

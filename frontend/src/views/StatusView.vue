@@ -29,7 +29,7 @@
             修改配置
           </el-button>
 
-          <el-button @click="showSnapshots = true" :disabled="!stateData.can_rollback">
+          <el-button @click="goToSnapshots">
             <el-icon><Clock /></el-icon>
             历史版本
           </el-button>
@@ -133,7 +133,7 @@ const stateText = computed(() => {
     case 'unknown':
       return '未知'
     case 'config_error':
-      return state.auto_rolled_back ? '配置错误（已回滚）' : '配置错误'
+      return '配置错误'
     case 'system_error':
       return '系统错误'
     default:
@@ -239,6 +239,11 @@ const confirmRollback = async (snapshot: Snapshot) => {
 // 跳转配置
 const goToConfig = () => {
   router.push('/config')
+}
+
+// 跳转历史版本
+const goToSnapshots = () => {
+  router.push('/snapshots')
 }
 
 // 监听对话框
