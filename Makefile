@@ -1,10 +1,14 @@
-.PHONY: all build hull bridge dev clean deps test help dist dist-native dist-check install install-native
+.PHONY: all build hull bridge dev clean deps test help dist dist-native dist-check \
+        builder builder-build builder-clean builder-rebuild \
+        install install-native
 
 # 版本和架构
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
 ARCH := $(shell uname -m)
 OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 DIST_NAME := claw-one-$(VERSION)-$(ARCH)
+BUILDER_IMAGE := claw-one-builder:$(VERSION)
+BUILDER_IMAGE_LATEST := claw-one-builder:latest
 
 # 默认目标
 all: build
@@ -14,16 +18,29 @@ help:
 	@echo "Claw One - 配置管理界面"
 	@echo ""
 	@echo "可用命令:"
+	@echo ""
+	@echo "开发命令:"
 	@echo "  make deps        - 安装前后端环境依赖"
 	@echo "  make dev         - 启动开发环境 (前台运行，Ctrl+C 停止)"
 	@echo "  make build       - 构建前后端 (生产环境)"
 	@echo "  make hull        - 只构建 hull (核心)"
 	@echo "  make bridge      - 只构建 bridge (界面)"
-	@echo "  make dist        - 打包独立安装包 (默认: Docker musl 静态)"
-	@echo "  make dist-native - 本地构建 (动态链接，快速测试用)"
-	@echo "  make dist-check  - 打包并生成校验和"
-	@echo "  make clean       - 清理构建产物"
 	@echo "  make test        - 运行测试"
+	@echo "  make clean       - 清理构建产物"
+	@echo ""
+	@echo "分发构建命令 (两阶段 Docker 构建):"
+	@echo "  make dist        - 完整构建 (检查/构建镜像 + 编译应用)"
+	@echo "  make builder     - 阶段1: 构建编译环境镜像"
+	@echo "  make builder-clean - 清理编译环境镜像"
+	@echo "  make builder-rebuild - 强制重新构建编译环境镜像"
+	@echo ""
+	@echo "本地快速构建 (仅测试用):"
+	@echo "  make dist-native   - 本地动态链接构建"
+	@echo "  make install-native - 本地自解压脚本"
+	@echo ""
+	@echo "其他:"
+	@echo "  make dist-check    - 生成校验和"
+	@echo "  make install       - 创建自解压脚本 (等同于 make dist)"
 
 # 构建前后端
 build: hull bridge
@@ -70,17 +87,67 @@ test:
 	cd hull && cargo test
 	cd bridge && npm run test || echo "前端测试跳过"
 
-# 默认分发包 (Docker musl 静态构建)
-# 提供最大兼容性，单文件可在所有 Linux 发行版运行
-dist:
-	@echo "📦 创建分发包 (musl 静态链接)..."
-	@echo "使用 Docker 构建，确保最大兼容性"
+# ============================================================
+# Docker 两阶段构建
+# ============================================================
+
+# 阶段1: 构建编译环境镜像
+# 镜像命名: claw-one-builder:{VERSION}
+# 版本升级时会自动重新构建
+builder:
+	@echo "🔧 阶段1: 构建编译环境镜像..."
+	@echo "镜像名称: $(BUILDER_IMAGE)"
 	@echo ""
 	@if ! command -v docker >/dev/null 2>&1; then \
-		echo "❌ Docker 未安装，请安装 Docker 或使用 'make dist-native' 本地构建"; \
+		echo "❌ Docker 未安装"; \
 		exit 1; \
 	fi
-	./scripts/build-musl.sh
+	@if docker image inspect "$(BUILDER_IMAGE)" >/dev/null 2>&1; then \
+		echo "✅ 编译环境镜像已存在: $(BUILDER_IMAGE)"; \
+		echo "   跳过构建，如需重新构建请运行: make builder-rebuild"; \
+	else \
+		echo "🔨 构建编译环境镜像..."; \
+		docker build \
+			-f scripts/Dockerfile.builder \
+			-t "$(BUILDER_IMAGE)" \
+			-t "$(BUILDER_IMAGE_LATEST)" \
+			scripts/; \
+		echo "✅ 编译环境镜像构建完成: $(BUILDER_IMAGE)"; \
+	fi
+	@echo ""
+
+# 强制重新构建编译环境镜像
+builder-rebuild:
+	@echo "🔧 强制重新构建编译环境镜像..."
+	@echo "镜像名称: $(BUILDER_IMAGE)"
+	@echo ""
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "❌ Docker 未安装"; \
+		exit 1; \
+	fi
+	@docker build \
+		--no-cache \
+		-f scripts/Dockerfile.builder \
+		-t "$(BUILDER_IMAGE)" \
+		-t "$(BUILDER_IMAGE_LATEST)" \
+		scripts/
+	@echo "✅ 编译环境镜像重新构建完成: $(BUILDER_IMAGE)"
+	@echo ""
+
+# 清理编译环境镜像
+builder-clean:
+	@echo "🧹 清理编译环境镜像..."
+	@docker rmi "$(BUILDER_IMAGE)" 2>/dev/null || echo "镜像 $(BUILDER_IMAGE) 不存在"
+	@docker rmi "$(BUILDER_IMAGE_LATEST)" 2>/dev/null || echo "镜像 $(BUILDER_IMAGE_LATEST) 不存在"
+	@echo "✅ 编译环境镜像已清理"
+
+# 阶段2: 使用编译环境镜像构建应用
+# 依赖阶段1 (builder)，如果镜像不存在会自动构建
+dist: builder
+	@echo "📦 阶段2: 构建应用程序..."
+	@echo "使用镜像: $(BUILDER_IMAGE)"
+	@echo ""
+	@./scripts/build-musl.sh
 	@echo ""
 	@echo "✅ 分发包已创建 (musl 静态链接，兼容所有 Linux 发行版)"
 
