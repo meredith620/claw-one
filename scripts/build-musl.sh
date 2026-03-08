@@ -48,7 +48,7 @@ echo ""
 
 # 创建 Dockerfile
 cat > "$BUILD_DIR/Dockerfile" << 'DOCKERFILE_EOF'
-FROM rust:1.75-alpine3.19 AS builder
+FROM rust:1.85-alpine3.21 AS builder
 
 # 安装构建依赖
 RUN apk add --no-cache \
