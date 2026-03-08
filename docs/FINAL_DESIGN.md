@@ -88,17 +88,18 @@
 
 ```
 claw-one/
-├── Cargo.toml              # Rust 依赖
-├── src/
-│   ├── main.rs             # Axum 服务启动
-│   ├── api.rs              # HTTP 路由
-│   ├── config.rs           # 配置管理 + Git 操作
-│   ├── runtime.rs          # CRI trait + OpenClaw 实现
-│   ├── state.rs            # AppState (Normal/SafeMode)
-│   └── systemd.rs          # systemd 交互
+├── hull/                   # Rust 后端（原 backend）
+│   ├── Cargo.toml          # Rust 依赖
+│   └── src/
+│       ├── main.rs         # Axum 服务启动
+│       ├── api.rs          # HTTP 路由
+│       ├── config.rs       # 配置管理 + Git 操作
+│       ├── runtime.rs      # CRI trait + OpenClaw 实现
+│       ├── state.rs        # AppState (Normal/SafeMode)
+│       └── systemd.rs      # systemd 交互
 ├── static/                 # Vue 构建产物（嵌入二进制）
 │   └── dist/
-├── frontend/               # Vue 源码（开发）
+├── bridge/                 # Vue 前端（原 frontend）
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.ts
@@ -304,14 +305,14 @@ http://box-ip:8080
 
 ```bash
 # 开发时
-frontend$ npm run dev      # Vite dev server localhost:5173
+bridge$ npm run dev        # Vite dev server localhost:5173
                            # 代理 API 到 Rust localhost:3000
 
 # 构建
-frontend$ npm run build    # 生成 dist/
+bridge$ npm run build      # 生成 dist/
 
 # Rust 嵌入
-cargo build --release      # 将 dist/ 嵌入二进制
+cd hull && cargo build --release  # 将 dist/ 嵌入二进制
 ```
 
 ---

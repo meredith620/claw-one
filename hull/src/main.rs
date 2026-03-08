@@ -214,7 +214,7 @@ async fn start_service(daemon: bool) {
         match start_systemd_service().await {
             Ok(_) => {
                 println!("✅ Claw One 已通过 systemd 启动");
-                println!("   查看状态: claw-one-backend status");
+                println!("   查看状态: claw-one status");
             }
             Err(e) => {
                 println!("⚠️  systemd 启动失败: {}", e);
@@ -259,7 +259,7 @@ async fn stop_service() {
 
     // 否则查找并终止进程
     let output = Command::new("pkill")
-        .args(["-f", "claw-one-backend"])
+        .args(["-f", "claw-one"])
         .output();
 
     match output {
@@ -283,7 +283,7 @@ async fn restart_service() {
 async fn show_status() {
     // 检查进程是否在运行
     let output = Command::new("pgrep")
-        .args(["-f", "claw-one-backend"])
+        .args(["-f", "claw-one"])
         .output();
 
     let is_running = matches!(output, Ok(o) if o.status.success());
@@ -335,10 +335,10 @@ async fn show_status() {
 
     println!();
     println!("常用命令:");
-    println!("  claw-one-backend start     # 启动服务");
-    println!("  claw-one-backend stop      # 停止服务");
-    println!("  claw-one-backend restart   # 重启服务");
-    println!("  claw-one-backend enable    # 配置开机自启");
+    println!("  claw-one start     # 启动服务");
+    println!("  claw-one stop      # 停止服务");
+    println!("  claw-one restart   # 重启服务");
+    println!("  claw-one enable    # 配置开机自启");
     println!();
 }
 
@@ -437,7 +437,7 @@ fn show_config() {
 /// 检查服务是否运行
 async fn is_running() -> bool {
     Command::new("pgrep")
-        .args(["-f", "claw-one-backend"])
+        .args(["-f", "claw-one"])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)

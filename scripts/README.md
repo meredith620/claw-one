@@ -37,7 +37,7 @@ http://localhost:8080
 ```
 ~/claw-one/
 ├── bin/
-│   ├── claw-one-backend    # 主程序
+│   ├── claw-one            # 主程序
 │   └── setup-config.sh     # 配置向导
 ├── config/                 # 配置文件
 │   ├── claw-one.toml       # 主配置
@@ -53,7 +53,7 @@ http://localhost:8080
 ### 手动启动
 
 ```bash
-~/claw-one/bin/claw-one-backend run
+~/claw-one/bin/claw-one run
 ```
 
 ### systemd 用户服务

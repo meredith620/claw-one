@@ -20,8 +20,8 @@ OpenClaw 配置守护程序 - 开箱即用的配置管理解决方案
 make deps
 
 # 2. 创建开发配置
-cp config/claw-one.toml.example backend/config.dev.toml
-# 编辑 backend/config.dev.toml 设置你的 OpenClaw 连接信息
+cp config/claw-one.toml.example hull/config.dev.toml
+# 编辑 hull/config.dev.toml 设置你的 OpenClaw 连接信息
 
 # 3. 启动开发模式
 make dev
@@ -39,35 +39,35 @@ make install
 nano ~/claw-one/config/claw-one.toml
 
 # 使用 CLI 启动/停止/查看状态
-claw-one-backend start      # 后台启动
-claw-one-backend status     # 查看状态
-claw-one-backend stop       # 停止服务
+claw-one start      # 后台启动
+claw-one status     # 查看状态
+claw-one stop       # 停止服务
 
 # 配置开机自启
-claw-one-backend enable     # 配置开机自启（systemd user）
-claw-one-backend disable    # 取消开机自启
+claw-one enable     # 配置开机自启（systemd user）
+claw-one disable    # 取消开机自启
 ```
 
 ### CLI 命令说明
 
-安装后，`claw-one-backend` 支持以下命令：
+安装后，`claw-one` 支持以下命令：
 
 ```bash
 # 服务管理
-claw-one-backend run           # 前台运行（默认）
-claw-one-backend start         # 后台启动（优先使用 systemd）
-claw-one-backend start -d      # 后台启动（守护进程模式）
-claw-one-backend stop          # 停止服务
-claw-one-backend restart       # 重启服务
-claw-one-backend status        # 查看运行状态
+claw-one run           # 前台运行（默认）
+claw-one start         # 后台启动（优先使用 systemd）
+claw-one start -d      # 后台启动（守护进程模式）
+claw-one stop          # 停止服务
+claw-one restart       # 重启服务
+claw-one status        # 查看运行状态
 
 # 开机自启管理
-claw-one-backend enable        # 配置开机自启
-claw-one-backend disable       # 取消开机自启
+claw-one enable        # 配置开机自启
+claw-one disable       # 取消开机自启
 
 # 配置查看
-claw-one-backend config        # 显示当前配置
-claw-one-backend -c /path/to/config.toml run  # 指定配置文件
+claw-one config        # 显示当前配置
+claw-one -c /path/to/config.toml run  # 指定配置文件
 ```
 
 ### 分发包安装
@@ -88,11 +88,11 @@ bash /tmp/claw-one-0.1.0-install.sh
 nano ~/claw-one/config/claw-one.toml
 
 # 启动服务（使用 CLI）
-claw-one-backend start
+claw-one start
 
 # 或配置开机自启后启动
-claw-one-backend enable
-claw-one-backend start
+claw-one enable
+claw-one start
 ```
 
 ## 配置文件
@@ -160,7 +160,7 @@ health_port = 18791
 
 | 命令 | 说明 |
 |------|------|
-| `make dev` | 开发模式（需要 backend/config.dev.toml）|
+| `make dev` | 开发模式（需要 hull/config.dev.toml）|
 | `make check` | 代码检查 |
 | `make check-env` | 检测安装环境依赖 |
 | `make clean` | 清理构建产物 |
@@ -197,7 +197,7 @@ make dist VERSION=1.0.0
 ```
 ~/claw-one/              # 安装目录
 ├── bin/
-│   └── claw-one-backend # 后端二进制
+│   └── claw-one # 核心程序
 ├── share/
 │   └── static/          # 前端静态文件
 ├── config/
@@ -261,7 +261,7 @@ systemctl --user daemon-reload
 cp -r ~/claw-one/config ~/claw-one-config.backup
 
 # 2. 停止服务
-claw-one-backend stop
+claw-one stop
 
 # 3. 安装新版本
 bash claw-one-new-version-install.sh
@@ -270,7 +270,7 @@ bash claw-one-new-version-install.sh
 cp ~/claw-one-config.backup/claw-one.toml ~/claw-one/config/
 
 # 5. 启动服务
-claw-one-backend start
+claw-one start
 
 # 6. 验证
 curl http://localhost:8080/api/health
