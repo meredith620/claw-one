@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION=${VERSION:-$(cd "$PROJECT_ROOT" && git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")}
 ARCH="x86_64"
-DIST_NAME="claw-one-${VERSION}-${ARCH}-musl"
+DIST_NAME="claw-one-${VERSION}-${ARCH}"
 
 echo "========================================"
 echo "Claw One musl 静态构建"

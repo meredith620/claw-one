@@ -1,68 +1,55 @@
-# Claw One 构建方案总结
+# Claw One 构建策略
 
-## 状态更新 (2026-03-08)
-
-### ✅ 需求1: 自解压安装脚本
-
-**已实现**
-
-```bash
-# 创建自解压安装脚本
-make self-extract
-
-# 输出
-dist/claw-one-VERSION-ARCH-install.sh
-```
-
-**特性:**
-- 单文件分发 (~4.4MB)
-- 内嵌 base64 编码的 tar.gz 包
-- 支持命令行选项：`--check`, `--target`, `--yes`
-- 自动检测环境依赖
-- 自动解压并运行安装
-
-**测试状态:** ✅ 容器测试通过
+**版本**: 2026-03-08  
+**状态**: musl 静态链接作为默认构建方式
 
 ---
 
-### 🔄 需求2: 多发行版兼容 (musl 静态链接)
+## 默认构建: musl 静态链接
 
-**方案设计完成，部分实现**
+从 2026-03-08 开始，Claw One **默认使用 musl 静态链接**构建，原因：
 
-#### 推荐方案: musl 静态链接
+1. **最大兼容性** - 单二进制可在所有 Linux 发行版运行
+2. **零依赖** - 不依赖系统 glibc 版本
+3. **MIT 授权** - 无 GPL 污染风险
+4. **体积小** - 比 glibc 静态链接小 3-5MB
 
-**原因:**
-1. **MIT 授权** - 无 GPL 污染风险
-2. **真正独立** - 零系统依赖
-3. **体积优化** - 比 glibc 静态链接小 3-5MB
-4. **Alpine 生态** - Docker 主流，工具链成熟
+---
 
-#### 实现方式
+## 构建方式
 
-由于主机缺少 `musl-gcc`，提供两种构建方式:
+### 方式1: Docker 构建 (推荐)
 
-**方式A: Docker 构建 (推荐)**
+无需安装任何工具链，仅需 Docker：
+
 ```bash
-# 使用 Alpine 容器构建
-./scripts/build-musl.sh
-
-# 输出
-# - dist/claw-one-VERSION-x86_64-musl-install.sh
+make dist
+# 或
+make install
 ```
 
-**方式B: 系统安装 musl-tools**
-```bash
-# Ubuntu/Debian
-sudo apt-get install musl-tools
+**输出:**
+- `dist/claw-one-VERSION-x86_64-install.sh` - 自解压安装脚本
+- `dist/claw-one-VERSION-x86_64.tar.gz` - 分发包
 
-# 然后使用 Makefile
-make musl-self-extract
+### 方式2: 本地构建 (快速测试)
+
+需要 Rust + Node.js 环境：
+
+```bash
+make dist-native
+# 或
+make install-native
 ```
 
-#### 兼容性对比
+**注意:** 本地构建使用动态链接，仅适用于当前系统，不推荐分发。
 
-| 发行版 | glibc 版本 | 动态构建 | musl 静态 |
-|--------|-----------|----------|-----------|
+---
+
+## 兼容性矩阵
+
+| 发行版 | glibc 版本 | `make dist-native` | `make dist` (musl) |
+|--------|-----------|-------------------|-------------------|
 | Ubuntu 24.04 | 2.39 | ✅ | ✅ |
 | Ubuntu 22.04 | 2.35 | ❌ | ✅ |
 | Ubuntu 20.04 | 2.31 | ❌ | ✅ |
@@ -74,31 +61,48 @@ make musl-self-extract
 
 ---
 
-## Makefile 新增目标
+## Makefile 目标
 
-```bashnmake self-extract      # 创建 glibc 自解压脚本
-make musl               # 构建 musl 静态二进制（需 musl-tools）
-make musl-dist          # 创建 musl 分发包
-make musl-self-extract  # 创建 musl 自解压脚本（需 musl-tools）
+| 目标 | 说明 | 构建方式 |
+|------|------|----------|
+| `make dist` | **默认分发包** (推荐) | Docker musl |
+| `make install` | **默认自解压脚本** (推荐) | Docker musl |
+| `make dist-native` | 本地分发包 (测试用) | 本地动态链接 |
+| `make install-native` | 本地自解压脚本 (测试用) | 本地动态链接 |
+| `make dist-check` | 生成校验和 | - |
+
+---
+
+## 技术细节
+
+### 为什么选择 musl?
+
+**与 glibc 静态链接对比:**
+
+| 特性 | glibc 静态 | musl 静态 |
+|------|-----------|-----------|
+| 授权 | LGPL (风险) | MIT (安全) |
+| 体积 | +5-10MB | +1-2MB |
+| DNS/NSS | 可能有问题 | 正常工作 |
+| 兼容性 | 好 | **极好** |
+
+### 构建流程
+
+```
+make dist
+    ↓
+./scripts/build-musl.sh
+    ↓
+Docker (rust:alpine)
+    ├── 构建 bridge (npm/vite)
+    ├── 构建 hull (cargo musl)
+    └── 打包输出
 ```
 
 ---
 
-## 建议的发布策略
+## 下一步
 
-**主发布 (glibc):**
-- `claw-one-VERSION-x86_64-install.sh` 
-- 适用于现代发行版 (Ubuntu 24.04+, Debian 12+)
-
-**兼容发布 (musl):**
-- `claw-one-VERSION-x86_64-musl-install.sh`
-- 适用于所有 Linux 发行版
-- 推荐用于生产环境
-
----
-
-## 下一步行动
-
-1. ✅ 自解压脚本 - 已完成并测试
-2. 🔄 musl 构建 - 提供 Docker 脚本，待执行测试
-3. 📋 CI/CD 集成 - 建议 GitHub Actions 同时构建两种版本
+1. 📦 运行 `make dist` 生成分发包
+2. 🧪 在 CentOS 7/Ubuntu 20.04 测试
+3. 📋 配置 CI/CD 自动构建

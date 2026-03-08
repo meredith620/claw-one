@@ -70,29 +70,25 @@ claw-one config        # 显示当前配置
 claw-one -c /path/to/config.toml run  # 指定配置文件
 ```
 
-### 分发包安装
-
-### 分发包安装
+### 分发包安装 (推荐)
 
 ```bash
-# 在编译机器上生成分发包
+# 在编译机器上生成分发包 (使用 Docker，musl 静态链接，兼容所有 Linux 发行版)
 make dist
 
 # 复制到目标机器
-scp claw-one-0.1.0-install.sh user@target-host:/tmp/
+scp dist/claw-one-VERSION-x86_64-install.sh user@target-host:/tmp/
 
 # 在目标机器上执行安装
-bash /tmp/claw-one-0.1.0-install.sh
+bash /tmp/claw-one-VERSION-x86_64-install.sh
 
 # 编辑配置
 nano ~/claw-one/config/claw-one.toml
 
-# 启动服务（使用 CLI）
-claw-one start
-
-# 或配置开机自启后启动
-claw-one enable
-claw-one start
+# 启动服务
+claw-one run      # 前台运行
+# 或
+claw-one start    # 后台启动
 ```
 
 ## 配置文件
