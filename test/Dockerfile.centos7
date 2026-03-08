@@ -1,0 +1,21 @@
+# CentOS 7 musl 兼容性测试容器
+FROM centos:7
+
+# 安装基本工具
+RUN yum install -y \
+    curl \
+    git \
+    procps \
+    which \
+    && yum clean all
+
+# 创建测试用户
+RUN useradd -m -s /bin/bash testuser
+
+# 切换到测试用户
+USER testuser
+ENV HOME=/home/testuser
+WORKDIR /home/testuser
+
+# 默认命令：等待手动测试
+CMD ["bash", "-c", "echo 'CentOS 7 测试环境已就绪' && echo 'glibc 版本:' && ldd --version && echo '' && echo '等待测试文件...' && sleep 3600"]
