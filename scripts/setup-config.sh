@@ -187,9 +187,6 @@ configure_systemd() {
     echo "[3/4] 服务启动方式"
     echo ""
     
-    # 先创建日志滚动脚本
-    create_log_wrapper
-    
     if ! command -v systemctl &> /dev/null; then
         print_warn "未检测到 systemd，将使用手动启动"
         return
@@ -198,7 +195,7 @@ configure_systemd() {
     echo "是否创建 systemd 用户服务？"
     echo "  - 可以随用户登录自动启动"
     echo "  - 支持 systemctl 命令管理"
-    echo "  - 日志自动滚动，保留最近5天"
+    echo "  - 日志自动滚动，保留最近7天"
     echo ""
     read -p "创建 systemd 用户服务? [Y/n]: " confirm
     
@@ -214,11 +211,12 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$HOME/claw-one/bin/claw-one-log-wrapper.sh
+ExecStart=$HOME/claw-one/bin/claw-one run
 WorkingDirectory=$HOME/claw-one
 Restart=on-failure
 RestartSec=5
 Environment="CLAW_ONE_CONFIG=$HOME/claw-one/config/claw-one.toml"
+Environment="CLAW_ONE_LOG_DIR=$HOME/claw-one/logs"
 
 [Install]
 WantedBy=default.target
@@ -232,8 +230,8 @@ EOF
         echo "  状态: systemctl --user status claw-one"
         echo "  自启: systemctl --user enable claw-one"
         echo ""
-        print_info "日志位置: ~/claw-one/logs/claw-one.log"
-        print_info "日志滚动: 按天滚动，保留最近5天"
+        print_info "日志位置: ~/claw-one/logs/claw-one.YYYY-MM-DD.log"
+        print_info "日志滚动: 按天滚动，保留最近7天"
     else
         print_info "跳过 systemd 配置"
         print_info "手动启动日志将输出到标准输出"

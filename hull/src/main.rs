@@ -118,9 +118,42 @@ async fn run_server() {
         "claw_one={},tower_http=debug",
         settings.server.log_level
     );
-    tracing_subscriber::fmt()
-        .with_env_filter(log_filter)
-        .init();
+    
+    // 检查是否需要写入日志文件（通过环境变量 CLAW_ONE_LOG_DIR 设置）
+    if let Ok(log_dir) = std::env::var("CLAW_ONE_LOG_DIR") {
+        // 生产模式：写入日志文件，按天滚动，保留7天
+        let log_dir_path = std::path::PathBuf::from(&log_dir);
+        if !log_dir_path.exists() {
+            std::fs::create_dir_all(&log_dir_path).ok();
+        }
+        
+        // 创建非阻塞写入器，按天滚动，保留7天
+        let file_appender = tracing_appender::rolling::Builder::new()
+            .rotation(tracing_appender::rolling::Rotation::DAILY)
+            .filename_prefix("claw-one")
+            .filename_suffix("log")
+            .max_log_files(7)
+            .build(&log_dir_path)
+            .expect("Failed to create log appender");
+        
+        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+        
+        tracing_subscriber::fmt()
+            .with_env_filter(log_filter)
+            .with_writer(non_blocking)
+            .with_ansi(false)  // 文件日志不需要 ANSI 颜色
+            .init();
+        
+        // 保持 guard 存活，防止日志丢失
+        std::mem::forget(_guard);
+        
+        info!("Logging to directory: {}", log_dir);
+    } else {
+        // 开发模式：输出到标准输出（前台运行）
+        tracing_subscriber::fmt()
+            .with_env_filter(log_filter)
+            .init();
+    }
 
     info!("Starting Claw One backend v{}", env!("CARGO_PKG_VERSION"));
     info!("Configuration: {:?}", std::env::var("CLAW_ONE_CONFIG").unwrap_or_else(|_| "default".to_string()));
@@ -227,22 +260,25 @@ async fn start_service(daemon: bool) {
 
 /// 守护进程模式启动
 async fn start_daemon_mode(exe_path: &std::path::Path) {
-    let log_file = dirs::home_dir()
-        .map(|h| h.join(".local/share/claw-one/claw-one.log"))
-        .unwrap_or_else(|| PathBuf::from("/tmp/claw-one.log"));
+    // 设置日志目录（安装目录下的 logs）
+    let log_dir = dirs::home_dir()
+        .map(|h| h.join("claw-one/logs"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/claw-one-logs"));
     
-    fs::create_dir_all(log_file.parent().unwrap()).ok();
+    fs::create_dir_all(&log_dir).ok();
     
     let _child = Command::new("nohup")
         .arg(exe_path)
         .arg("run")
-        .stdout(Stdio::from(fs::File::create(&log_file).expect("Failed to create log file")))
-        .stderr(Stdio::from(fs::File::create(&log_file).expect("Failed to create log file")))
+        .env("CLAW_ONE_LOG_DIR", &log_dir)
+        .stdout(Stdio::null())  // 日志通过 tracing 写入文件
+        .stderr(Stdio::null())  // 不再重定向到单个文件，由 tracing-appender 管理
         .spawn()
         .expect("Failed to start daemon");
     
     println!("✅ Claw One 已在后台启动");
-    println!("   日志文件: {}", log_file.display());
+    println!("   日志目录: {}", log_dir.display());
+    println!("   日志滚动: 按天滚动，保留最近7天");
 }
 
 /// 停止服务
