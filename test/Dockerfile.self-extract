@@ -1,0 +1,23 @@
+# 自解压安装脚本测试容器
+FROM debian:bookworm-slim
+
+# 安装基础依赖
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建测试用户
+RUN useradd -m -s /bin/bash testuser
+
+# 复制自解压脚本
+COPY claw-one-*-install.sh /tmp/install.sh
+RUN chmod +x /tmp/install.sh && chown testuser:testuser /tmp/install.sh
+
+# 切换到测试用户
+USER testuser
+ENV HOME=/home/testuser
+
+# 默认命令：测试自解压脚本
+CMD ["bash", "-c", "echo '=== 测试自解压脚本 ===' && /tmp/install.sh --check && echo '' && echo '=== 执行安装 ===' && yes '' | /tmp/install.sh -y && echo '' && echo '=== 验证安装 ===' && ls -la ~/claw-one/bin/ && ~/claw-one/bin/claw-one --version"]
