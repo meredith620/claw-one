@@ -91,7 +91,7 @@ make install-native
 ```
 make dist
     ↓
-./scripts/build-musl.sh
+./scripts/build-dist.sh
     ↓
 Docker (rust:alpine)
     ├── 构建 bridge (npm/vite)

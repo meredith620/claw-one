@@ -67,15 +67,16 @@ build_application() {
     
     # 创建临时目录用于输出
     OUTPUT_DIR=$(mktemp -d)
-    trap "rm -rf $OUTPUT_DIR" EXIT
+    # 清理时先修复权限再删除（容器内root创建的文件需要修改权限）
+    trap "docker run --rm -v $OUTPUT_DIR:/out alpine:latest sh -c 'chmod -R 777 /out' 2>/dev/null; rm -rf $OUTPUT_DIR" EXIT
     
     echo "🔨 构建 bridge (前端)..."
     docker run --rm \
         -v "$PROJECT_ROOT/bridge:/build/bridge:ro" \
         -v "$OUTPUT_DIR/static:/output/static" \
-        -w /build/bridge \
+        -w /tmp/build \
         "$BUILDER_IMAGE" \
-        sh -c "npm install && npx vite build && cp -r dist/* /output/static/"
+        sh -c "cp -r /build/bridge/* /tmp/build/ && npm install && npx vite build --outDir /output/static"
     
     echo "✅ 前端构建完成"
     echo ""
@@ -84,9 +85,9 @@ build_application() {
     docker run --rm \
         -v "$PROJECT_ROOT/hull:/build/hull:ro" \
         -v "$OUTPUT_DIR:/output" \
-        -w /build/hull \
+        -w /tmp/hull-build \
         "$BUILDER_IMAGE" \
-        sh -c "cargo update && cargo build --release --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/claw-one /output/"
+        sh -c "cp -r /build/hull/* /tmp/hull-build/ && cargo update && cargo build --release --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/claw-one /output/"
     
     echo "✅ 后端构建完成"
     echo ""
@@ -297,7 +298,7 @@ MARKER_LINE=$(grep -n "__ARCHIVE_MARKER__" "$SCRIPT_PATH" | tail -1 | cut -d: -f
 ARCHIVE_START=$((MARKER_LINE + 1))
 
 mkdir -p "$INSTALL_DIR"
-tail -n +$ARCHIVE_START "$SCRIPT_PATH" | base64 -d | tar xzf - -C "$(dirname "$INSTALL_DIR")"
+tail -n +$ARCHIVE_START "$SCRIPT_PATH" | base64 -d | tar xzf - -C "$INSTALL_DIR" --strip-components=1
 
 print_ok "文件已解压到: $INSTALL_DIR"
 

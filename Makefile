@@ -147,7 +147,7 @@ dist: builder
 	@echo "📦 阶段2: 构建应用程序..."
 	@echo "使用镜像: $(BUILDER_IMAGE)"
 	@echo ""
-	@./scripts/build-musl.sh
+	@./scripts/build-dist.sh
 	@echo ""
 	@echo "✅ 分发包已创建 (musl 静态链接，兼容所有 Linux 发行版)"
 
