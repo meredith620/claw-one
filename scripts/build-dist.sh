@@ -15,6 +15,13 @@ DIST_NAME="claw-one-${VERSION}-${ARCH}"
 BUILDER_IMAGE="claw-one-builder:${VERSION}"
 BUILDER_IMAGE_LATEST="claw-one-builder:latest"
 
+# 缓存目录
+CACHE_DIR="$PROJECT_ROOT/.cache"
+CARGO_REGISTRY_CACHE="$CACHE_DIR/cargo-registry"
+CARGO_GIT_CACHE="$CACHE_DIR/cargo-git"
+CARGO_TARGET_CACHE="$CACHE_DIR/cargo-target"
+NPM_CACHE="$CACHE_DIR/npm"
+
 echo "========================================"
 echo "Claw One musl 静态构建"
 echo "Version: $VERSION"
@@ -31,29 +38,29 @@ fi
 # 阶段1: 构建/检查编译环境镜像
 build_builder_image() {
     echo "📦 阶段1: 准备编译环境镜像..."
-    
+
     # 检查本地是否已存在对应版本的镜像
     if docker image inspect "$BUILDER_IMAGE" >/dev/null 2>&1; then
         echo "✅ 编译环境镜像已存在: $BUILDER_IMAGE"
         return 0
     fi
-    
+
     # 检查是否存在 latest 标签的镜像（可重用基础层）
     if docker image inspect "$BUILDER_IMAGE_LATEST" >/dev/null 2>&1; then
         echo "📝 发现旧版本镜像，将重新构建新版本..."
     fi
-    
+
     echo "🔨 构建编译环境镜像..."
     echo "   Dockerfile: scripts/Dockerfile.builder"
     echo "   镜像名称: $BUILDER_IMAGE"
     echo ""
-    
+
     docker build \
         -f "$SCRIPT_DIR/Dockerfile.builder" \
         -t "$BUILDER_IMAGE" \
         -t "$BUILDER_IMAGE_LATEST" \
         "$SCRIPT_DIR"
-    
+
     echo ""
     echo "✅ 编译环境镜像构建完成"
     echo "   镜像: $BUILDER_IMAGE"
@@ -64,62 +71,69 @@ build_builder_image() {
 build_application() {
     echo "📦 阶段2: 构建应用程序..."
     echo ""
-    
+
     # 创建临时目录用于输出
     OUTPUT_DIR=$(mktemp -d)
     # 清理时先修复权限再删除（容器内root创建的文件需要修改权限）
     trap "docker run --rm -v $OUTPUT_DIR:/out alpine:latest sh -c 'chmod -R 777 /out' 2>/dev/null; rm -rf $OUTPUT_DIR" EXIT
-    
+
     echo "🔨 构建 bridge (前端)..."
     docker run --rm \
         -v "$PROJECT_ROOT/bridge:/build/bridge:ro" \
         -v "$OUTPUT_DIR/static:/output/static" \
+        -v "$NPM_CACHE:/root/.npm" \
         -w /tmp/build \
         "$BUILDER_IMAGE" \
-        sh -c "cp -r /build/bridge/* /tmp/build/ && npm install && npx vite build --outDir /output/static"
-    
+        sh -c "cp -r /build/bridge/* /tmp/build/ && npm install --cache /root/.npm && npx vite build --outDir /output/static"
+
     echo "✅ 前端构建完成"
     echo ""
-    
+
     echo "🔨 构建 hull (musl 静态)..."
     docker run --rm \
         -v "$PROJECT_ROOT/hull:/build/hull:ro" \
         -v "$OUTPUT_DIR:/output" \
+        -v "$CARGO_REGISTRY_CACHE:/usr/local/cargo/registry" \
+        -v "$CARGO_GIT_CACHE:/usr/local/cargo/git" \
+        -v "$CARGO_TARGET_CACHE:/tmp/hull-build/target" \
         -w /tmp/hull-build \
         "$BUILDER_IMAGE" \
-        sh -c "cp -r /build/hull/* /tmp/hull-build/ && cargo update && cargo build --release --target x86_64-unknown-linux-musl && cp target/x86_64-unknown-linux-musl/release/claw-one /output/"
-    
+        sh -c "cp -r /build/hull/* /tmp/hull-build/ && cp /build/hull/Cargo.lock /tmp/hull-build/ && \
+               CARGO_TARGET_DIR=/tmp/hull-build/target \
+               cargo build --release --target x86_64-unknown-linux-musl && \
+               cp target/x86_64-unknown-linux-musl/release/claw-one /output/"
+
     echo "✅ 后端构建完成"
     echo ""
-    
+
     # 收集输出
     echo "📦 打包分发包..."
     mkdir -p "$PROJECT_ROOT/dist"
-    
+
     # 创建分发目录结构
     DIST_TMP=$(mktemp -d)
     mkdir -p "$DIST_TMP/$DIST_NAME/bin"
     mkdir -p "$DIST_TMP/$DIST_NAME/share/static"
     mkdir -p "$DIST_TMP/$DIST_NAME/share/config"
     mkdir -p "$DIST_TMP/$DIST_NAME/scripts"
-    
+
     # 复制构建产物
     cp "$OUTPUT_DIR/claw-one" "$DIST_TMP/$DIST_NAME/bin/"
     chmod +x "$DIST_TMP/$DIST_NAME/bin/claw-one"
     cp -r "$OUTPUT_DIR/static/"* "$DIST_TMP/$DIST_NAME/share/static/"
-    
+
     # 复制脚本和文档
     cp "$PROJECT_ROOT/scripts/install.sh" \
        "$PROJECT_ROOT/scripts/uninstall.sh" \
        "$PROJECT_ROOT/scripts/check-env.sh" \
        "$DIST_TMP/$DIST_NAME/scripts/"
     chmod +x "$DIST_TMP/$DIST_NAME/scripts/"*.sh
-    
+
     cp "$PROJECT_ROOT/scripts/setup-config.sh" "$DIST_TMP/$DIST_NAME/bin/"
     chmod +x "$DIST_TMP/$DIST_NAME/bin/setup-config.sh"
-    
+
     cp "$PROJECT_ROOT/scripts/README.md" "$DIST_TMP/$DIST_NAME/"
-    
+
     # 生成配置模板
     cat > "$DIST_TMP/$DIST_NAME/share/config/claw-one.toml.template" << EOF
 [server]
@@ -141,13 +155,13 @@ static_dir = "~/claw-one/share/static"
 auto_backup = true
 safe_mode = true
 EOF
-    
+
     # 创建 tar.gz
     tar czf "$PROJECT_ROOT/dist/$DIST_NAME.tar.gz" -C "$DIST_TMP" "$DIST_NAME"
-    
+
     # 清理临时目录
     rm -rf "$DIST_TMP"
-    
+
     echo "✅ 分发包已创建: dist/$DIST_NAME.tar.gz"
     echo ""
 }
@@ -155,16 +169,16 @@ EOF
 # 构建自解压脚本
 build_self_extract() {
     echo "📦 创建自解压安装脚本..."
-    
+
     # 创建临时目录
     TMP_DIR=$(mktemp -d)
-    
+
     # 解压 tar.gz
     tar xzf "$PROJECT_ROOT/dist/$DIST_NAME.tar.gz" -C "$TMP_DIR"
-    
+
     # 重新打包为 tar.gz 并 base64 编码
     tar czf - -C "$TMP_DIR" "$DIST_NAME" | base64 -w0 > "$TMP_DIR/archive.b64"
-    
+
     # 创建自解压脚本头部
     cat > "$PROJECT_ROOT/dist/$DIST_NAME-install.sh" << 'SCRIPT_HEADER'
 #!/bin/bash
@@ -353,31 +367,37 @@ SCRIPT_HEADER
     # 替换版本变量
     sed -i "s/SCRIPT_VERSION/$VERSION/g" "$PROJECT_ROOT/dist/$DIST_NAME-install.sh"
     sed -i "s/SCRIPT_ARCH/$ARCH/g" "$PROJECT_ROOT/dist/$DIST_NAME-install.sh"
-    
+
     # 追加 base64 编码的归档数据
     cat "$TMP_DIR/archive.b64" >> "$PROJECT_ROOT/dist/$DIST_NAME-install.sh"
-    
+
     # 设置可执行权限
     chmod +x "$PROJECT_ROOT/dist/$DIST_NAME-install.sh"
-    
+
     # 清理
     rm -rf "$TMP_DIR"
-    
+
     echo "✅ 自解压脚本已创建: dist/$DIST_NAME-install.sh"
     echo ""
 }
 
 # 主流程
 main() {
+    # 创建缓存目录
+    mkdir -p "$CARGO_REGISTRY_CACHE"
+    mkdir -p "$CARGO_GIT_CACHE"
+    mkdir -p "$CARGO_TARGET_CACHE"
+    mkdir -p "$NPM_CACHE"
+
     # 阶段1: 构建编译环境
     build_builder_image
-    
+
     # 阶段2: 构建应用程序
     build_application
-    
+
     # 可选: 构建自解压脚本
     build_self_extract
-    
+
     echo "========================================"
     echo "构建完成！"
     echo "========================================"
