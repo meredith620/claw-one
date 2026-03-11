@@ -144,6 +144,8 @@ builder-clean:
 # 阶段2: 使用编译环境镜像构建应用
 # 依赖阶段1 (builder)，如果镜像不存在会自动构建
 dist: builder
+	@echo "🧹 清理历史构建文件..."
+	@rm -rf dist/*
 	@echo "📦 阶段2: 构建应用程序..."
 	@echo "使用镜像: $(BUILDER_IMAGE)"
 	@echo ""
@@ -154,10 +156,11 @@ dist: builder
 # 本地分发包 (动态链接)
 # 仅用于快速本地测试，不推荐用于分发
 dist-native: build
+	@echo "🧹 清理历史构建文件..."
+	@rm -rf dist/*
 	@echo "📦 创建本地分发包 (动态链接)..."
 	@echo "⚠️  注意: 此版本依赖系统 glibc，仅用于本地测试"
 	@echo ""
-	@rm -rf dist/$(DIST_NAME)
 	@mkdir -p dist/$(DIST_NAME)/bin
 	@mkdir -p dist/$(DIST_NAME)/share/static
 	@mkdir -p dist/$(DIST_NAME)/share/config
