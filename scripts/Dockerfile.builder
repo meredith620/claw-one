@@ -20,6 +20,14 @@ RUN apk add --no-cache \
 # 安装 musl 目标
 RUN rustup target add x86_64-unknown-linux-musl
 
+# 确保 cargo 目录对所有用户可写（支持任意 UID 运行）
+RUN mkdir -p /usr/local/cargo/registry /usr/local/cargo/git && \
+    chmod -R 777 /usr/local/cargo
+
+# 创建 builder 用户家目录（供 npm 缓存使用）
+RUN mkdir -p /home/builder/.npm && \
+    chmod -R 777 /home/builder
+
 # 设置工作目录
 WORKDIR /build
 

@@ -22,6 +22,10 @@ CARGO_GIT_CACHE="$CACHE_DIR/cargo-git"
 CARGO_TARGET_CACHE="$CACHE_DIR/cargo-target"
 NPM_CACHE="$CACHE_DIR/npm"
 
+# 当前用户ID（用于容器内权限映射）
+USER_ID=$(id -u)
+GROUP_ID=$(id -g)
+
 echo "========================================"
 echo "Claw One musl 静态构建"
 echo "Version: $VERSION"
@@ -79,29 +83,33 @@ build_application() {
 
     echo "🔨 构建 bridge (前端)..."
     docker run --rm \
+        --user "$USER_ID:$GROUP_ID" \
         -v "$PROJECT_ROOT/bridge:/build/bridge:ro" \
         -v "$OUTPUT_DIR/static:/output/static" \
-        -v "$NPM_CACHE:/root/.npm" \
+        -v "$NPM_CACHE:/home/builder/.npm" \
+        -e NPM_CONFIG_CACHE=/home/builder/.npm \
         -w /tmp/build \
         "$BUILDER_IMAGE" \
-        sh -c "cp -r /build/bridge/* /tmp/build/ && npm install --cache /root/.npm && npx vite build --outDir /output/static"
+        sh -c "cp -r /build/bridge/* /tmp/build/ && npm install && npx vite build --outDir /output/static"
 
     echo "✅ 前端构建完成"
     echo ""
 
     echo "🔨 构建 hull (musl 静态)..."
     docker run --rm \
+        --user "$USER_ID:$GROUP_ID" \
         -v "$PROJECT_ROOT/hull:/build/hull:ro" \
         -v "$OUTPUT_DIR:/output" \
         -v "$CARGO_REGISTRY_CACHE:/usr/local/cargo/registry" \
         -v "$CARGO_GIT_CACHE:/usr/local/cargo/git" \
         -v "$CARGO_TARGET_CACHE:/tmp/hull-build/target" \
+        -e CARGO_HOME=/usr/local/cargo \
+        -e CARGO_TARGET_DIR=/tmp/hull-build/target \
         -w /tmp/hull-build \
         "$BUILDER_IMAGE" \
         sh -c "cp -r /build/hull/* /tmp/hull-build/ && cp /build/hull/Cargo.lock /tmp/hull-build/ && \
-               CARGO_TARGET_DIR=/tmp/hull-build/target \
                cargo build --release --target x86_64-unknown-linux-musl && \
-               cp target/x86_64-unknown-linux-musl/release/claw-one /output/"
+               cp /tmp/hull-build/target/x86_64-unknown-linux-musl/release/claw-one /output/"
 
     echo "✅ 后端构建完成"
     echo ""
