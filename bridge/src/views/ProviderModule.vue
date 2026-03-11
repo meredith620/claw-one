@@ -63,7 +63,11 @@
     <!-- 添加/编辑对话框 -->
     <el-dialog v-model="showAddDialog" :title="dialogTitle" width="550px">
       <el-form :model="formData" label-width="120px">
-        <el-form-item label="实例名称" required>
+        <el-form-item v-if="currentType === 'custom'" label="Provider ID" required>
+          <el-input v-model="formData.id" placeholder="如 redfrog、my-provider" :disabled="isEditing" />
+          <div class="form-hint">自定义 Provider 的唯一标识</div>
+        </el-form-item>
+        <el-form-item v-else label="实例名称" required>
           <el-input v-model="formData.name" placeholder="如 work、personal" :disabled="isEditing" />
           <div v-if="!isEditing" class="form-hint">Provider ID: {{ currentType }}-{{ formData.name || 'xxx' }}</div>
         </el-form-item>
@@ -74,6 +78,11 @@
             <el-radio-button label="cn">.cn</el-radio-button>
           </el-radio-group>
         </el-form-item>
+        <el-form-item v-if="currentType === 'custom'" label="Base URL" required>
+          <el-input v-model="formData.baseUrl" placeholder="如 https://api.example.com/v1" />
+          <div class="form-hint">自定义 Provider 的 API 基础 URL</div>
+        </el-form-item>
+        
         <el-form-item label="API Key" required>
           <el-input v-model="formData.apiKey" type="password" placeholder="输入 API Key" show-password />
         </el-form-item>
@@ -122,6 +131,7 @@ const providerTypes = [
   { id: 'moonshot', name: 'Moonshot', icon: '🌙' },
   { id: 'openai', name: 'OpenAI', icon: '🤖' },
   { id: 'anthropic', name: 'Anthropic', icon: '🧠' },
+  { id: 'custom', name: '其他 Provider', icon: '🔧' },
 ]
 
 const loading = ref(false)
@@ -143,7 +153,13 @@ const modelPriority = reactive({
 
 const showAddDialog = ref(false)
 const formData = reactive({
-  id: '', name: '', version: 'coding', apiKey: '', defaultModel: '', enabled: true,
+  id: '',
+  name: '',
+  version: 'coding',
+  apiKey: '',
+  baseUrl: '',
+  defaultModel: '',
+  enabled: true,
 })
 
 const dialogTitle = computed(() => isEditing.value ? `配置 ${formData.id}` : `添加 ${providerTypes.find(t => t.id === currentType.value)?.name} 实例`)
@@ -165,11 +181,27 @@ const loadData = async () => {
     const [providersRes, priorityRes] = await Promise.all([getProviders(), getModelPriority()])
     
     const providers = providersRes.data || []
-    instances.moonshot = providers.filter((p: any) => p.id?.startsWith('moonshot-'))
-    instances.openai = providers.filter((p: any) => p.id?.startsWith('openai-'))
-    instances.anthropic = providers.filter((p: any) => p.id?.startsWith('anthropic-'))
-    instances.custom = providers.filter((p: any) => 
-      !p.id?.startsWith('moonshot-') && !p.id?.startsWith('openai-') && !p.id?.startsWith('anthropic-'))
+    
+    // 清空现有实例
+    instances.moonshot = []
+    instances.openai = []
+    instances.anthropic = []
+    instances.custom = []
+    
+    // 分类 provider
+    providers.forEach((p: any) => {
+      const id = p.id || ''
+      if (id.startsWith('moonshot-')) {
+        instances.moonshot.push(p)
+      } else if (id.startsWith('openai-')) {
+        instances.openai.push(p)
+      } else if (id.startsWith('anthropic-')) {
+        instances.anthropic.push(p)
+      } else {
+        // 其他所有 provider 归为 custom
+        instances.custom.push(p)
+      }
+    })
     
     modelPriority.primary = priorityRes.data?.primary || ''
     modelPriority.fallbacks = priorityRes.data?.fallbacks?.length > 0 ? priorityRes.data.fallbacks : []
@@ -269,10 +301,21 @@ const openAddDialog = (typeId: string) => {
 }
 
 const editInstance = (instance: any) => {
-  currentType.value = instance.id.split('-')[0]
+  // 根据 ID 前缀或 category 推断类型
+  const id = instance.id || ''
+  if (id.startsWith('moonshot-')) {
+    currentType.value = 'moonshot'
+  } else if (id.startsWith('openai-')) {
+    currentType.value = 'openai'
+  } else if (id.startsWith('anthropic-')) {
+    currentType.value = 'anthropic'
+  } else {
+    currentType.value = 'custom'
+  }
+  
   isEditing.value = true
   formData.id = instance.id
-  formData.name = instance.name || instance.id.split('-')[1]
+  formData.name = instance.name || instance.id.split('-')[1] || instance.id
   formData.apiKey = instance.apiKey || ''
   formData.defaultModel = instance.defaultModel || ''
   formData.enabled = instance.enabled !== false
@@ -281,27 +324,49 @@ const editInstance = (instance: any) => {
 }
 
 const saveInstance = async () => {
-  if (!formData.name && !isEditing.value) { ElMessage.error('请输入实例名称'); return }
+  // 对于非 custom 类型，需要验证 name；对于 custom 类型，直接验证 id
+  if (currentType.value !== 'custom' && !formData.name && !isEditing.value) { 
+    ElMessage.error('请输入实例名称'); return 
+  }
+  if (currentType.value === 'custom' && !formData.id && !isEditing.value) {
+    ElMessage.error('请输入 Provider ID'); return
+  }
   if (!formData.apiKey) { ElMessage.error('请输入 API Key'); return }
   if (!formData.defaultModel) { ElMessage.error('请选择默认模型'); return }
 
-  const id = isEditing.value ? formData.id : `${currentType.value}-${formData.name}`
+  // 构建 ID
+  let id: string
+  if (isEditing.value) {
+    id = formData.id
+  } else if (currentType.value === 'custom') {
+    id = formData.id
+  } else {
+    id = `${currentType.value}-${formData.name}`
+  }
+  
   saving.value = true
   
   try {
-    const baseUrls: Record<string, Record<string, string>> = {
-      moonshot: { coding: 'https://api.kimi.com/coding/', ai: 'https://api.moonshot.ai/v1', cn: 'https://api.moonshot.cn/v1' },
-      openai: { default: 'https://api.openai.com/v1' },
-      anthropic: { default: 'https://api.anthropic.com/v1' },
+    // 对于 custom 类型，使用表单中输入的 baseUrl；对于标准类型，使用预定义 baseUrl
+    let baseUrl: string
+    if (currentType.value === 'custom') {
+      baseUrl = formData.baseUrl || ''
+    } else {
+      const baseUrls: Record<string, Record<string, string>> = {
+        moonshot: { coding: 'https://api.kimi.com/coding/', ai: 'https://api.moonshot.ai/v1', cn: 'https://api.moonshot.cn/v1' },
+        openai: { default: 'https://api.openai.com/v1' },
+        anthropic: { default: 'https://api.anthropic.com/v1' },
+      }
+      baseUrl = baseUrls[currentType.value]?.[formData.version] || baseUrls[currentType.value]?.default || ''
     }
 
     const data = {
       id, 
-      name: formData.name,
+      name: currentType.value === 'custom' ? formData.name || id : formData.name,
       version: currentType.value === 'moonshot' ? formData.version : undefined,
       enabled: formData.enabled,
       apiKey: formData.apiKey,
-      baseUrl: baseUrls[currentType.value]?.[formData.version] || baseUrls[currentType.value]?.default || '',
+      baseUrl: baseUrl,
       defaultModel: formData.defaultModel,
       api: currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-completions',
     }
