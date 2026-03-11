@@ -191,11 +191,23 @@ const loadData = async () => {
     // 分类 provider
     providers.forEach((p: any) => {
       const id = p.id || ''
-      if (id.startsWith('moonshot-')) {
+      const baseUrl = p.baseUrl || ''
+      
+      // 判断 provider 类型
+      const isMoonshot = id.startsWith('moonshot-') || 
+                         id.includes('kimi') || 
+                         baseUrl.includes('kimi.com') || 
+                         baseUrl.includes('moonshot.cn') || 
+                         baseUrl.includes('moonshot.ai')
+      
+      const isOpenAI = id.startsWith('openai-') || baseUrl.includes('openai.com')
+      const isAnthropic = id.startsWith('anthropic-') || id.includes('claude') || baseUrl.includes('anthropic.com')
+      
+      if (isMoonshot) {
         instances.moonshot.push(p)
-      } else if (id.startsWith('openai-')) {
+      } else if (isOpenAI) {
         instances.openai.push(p)
-      } else if (id.startsWith('anthropic-')) {
+      } else if (isAnthropic) {
         instances.anthropic.push(p)
       } else {
         // 其他所有 provider 归为 custom
@@ -301,13 +313,24 @@ const openAddDialog = (typeId: string) => {
 }
 
 const editInstance = (instance: any) => {
-  // 根据 ID 前缀或 category 推断类型
+  // 根据 ID 前缀、名称或 baseUrl 推断类型
   const id = instance.id || ''
-  if (id.startsWith('moonshot-')) {
+  const baseUrl = instance.baseUrl || ''
+  
+  const isMoonshot = id.startsWith('moonshot-') || 
+                     id.includes('kimi') || 
+                     baseUrl.includes('kimi.com') || 
+                     baseUrl.includes('moonshot.cn') || 
+                     baseUrl.includes('moonshot.ai')
+  
+  const isOpenAI = id.startsWith('openai-') || baseUrl.includes('openai.com')
+  const isAnthropic = id.startsWith('anthropic-') || id.includes('claude') || baseUrl.includes('anthropic.com')
+  
+  if (isMoonshot) {
     currentType.value = 'moonshot'
-  } else if (id.startsWith('openai-')) {
+  } else if (isOpenAI) {
     currentType.value = 'openai'
-  } else if (id.startsWith('anthropic-')) {
+  } else if (isAnthropic) {
     currentType.value = 'anthropic'
   } else {
     currentType.value = 'custom'
