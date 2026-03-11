@@ -240,8 +240,8 @@ ExecStart=$HOME/claw-one/bin/claw-one run
 WorkingDirectory=$HOME/claw-one
 Restart=on-failure
 RestartSec=5
-Environment="CLAW_ONE_CONFIG=$HOME/claw-one/config/claw-one.toml"
-Environment="CLAW_ONE_LOG_DIR=$HOME/claw-one/logs"
+Environment="CLAW_ONE_CONFIG=%h/claw-one/config/claw-one.toml"
+Environment="CLAW_ONE_LOG_DIR=%h/claw-one/logs"
 
 [Install]
 WantedBy=default.target

@@ -61,10 +61,15 @@ check_existing() {
         case "$choice" in
             1)
                 print_info "覆盖安装..."
-                BACKUP_DIR="$INSTALL_DIR.backup.$(date +%Y%m%d%H%M%S)"
-                mv "$INSTALL_DIR/config" "$BACKUP_DIR/config" 2>/dev/null || true
-                print_ok "配置已备份到: $BACKUP_DIR/config"
+                # 将配置备份到安装目录外，避免被删除
+                BACKUP_DIR="/tmp/claw-one-config-backup.$$"
+                cp -r "$INSTALL_DIR/config" "$BACKUP_DIR/" 2>/dev/null || true
+                print_ok "配置已备份到: $BACKUP_DIR"
                 rm -rf "$INSTALL_DIR"
+                # 创建新的安装目录并恢复配置
+                mkdir -p "$INSTALL_DIR"
+                mv "$BACKUP_DIR" "$INSTALL_DIR/config" 2>/dev/null || true
+                rm -rf "$BACKUP_DIR" 2>/dev/null || true
                 ;;
             2)
                 BACKUP_DIR="$INSTALL_DIR.backup.$(date +%Y%m%d%H%M%S)"
