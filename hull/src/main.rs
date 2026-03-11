@@ -183,6 +183,11 @@ async fn run_server() {
     }
 
     // 构建路由
+    let static_dir_clone = static_dir.clone();
+    let static_service = tower_http::services::ServeDir::new(&static_dir)
+        .append_index_html_on_directories(true)
+        .fallback(tower_http::services::ServeFile::new(static_dir.join("index.html")));
+    
     let app = Router::new()
         .route("/api/health", get(health_handler))
         .route("/api/state", get(api::state::handler))
@@ -213,7 +218,7 @@ async fn run_server() {
         .route("/api/setup/check", get(api::setup::check_handler))
         .route("/api/setup/complete", post(api::setup::complete_handler))
         .route("/api/setup/reset", post(api::setup::reset_handler))
-        .fallback_service(tower_http::services::ServeDir::new(static_dir))
+        .fallback_service(static_service)
         .layer(axum::extract::Extension(config_manager))
         .layer(axum::extract::Extension(state_manager));
 

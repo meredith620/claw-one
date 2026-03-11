@@ -1,36 +1,6 @@
 <template>
   <div class="provider-module" v-loading="loading">
-    <div v-for="type in providerTypes" :key="type.id" class="provider-section">
-      <div class="section-header">
-        <div class="section-title">
-          <span class="provider-icon">{{ type.icon }}</span>
-          <span>{{ type.name }}</span>
-        </div>
-        <el-button type="primary" size="small" @click="openAddDialog(type.id)">+ 添加实例</el-button>
-      </div>
-
-      <div v-if="getInstances(type.id).length === 0" class="empty-state">
-        <el-empty description="暂无实例" :image-size="60" />
-      </div>
-
-      <div class="instances-grid">
-        <div v-for="instance in getInstances(type.id)" :key="instance.id" class="instance-card" :class="{ disabled: !instance.enabled }">
-          <div class="instance-header">
-            <span class="instance-id">{{ instance.id }}</span>
-            <div class="instance-actions">
-              <el-tag :type="instance.enabled ? 'success' : 'info'" size="small">{{ instance.enabled ? '已启用' : '未启用' }}</el-tag>
-              <el-button link type="primary" @click="editInstance(instance)">配置</el-button>
-              <el-button link type="danger" @click="deleteInstance(instance)">删除</el-button>
-            </div>
-          </div>
-          <div class="instance-meta">
-            <span v-if="instance.version">版本: {{ instance.version }}</span>
-            <span v-if="instance.defaultModel">模型: {{ instance.defaultModel }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
+    <!-- 模型优先级设置 - 移到最上方 -->
     <div class="priority-section">
       <div class="section-header">
         <span class="section-title">🎯 模型优先级设置</span>
@@ -57,6 +27,39 @@
         <el-button v-if="modelPriority.fallbacks.length < 3" link type="primary" @click="addFallback" class="add-fallback-btn">
           <el-icon><Plus /></el-icon>添加 Fallback
         </el-button>
+      </div>
+    </div>
+
+    <!-- Provider 分类列表 -->
+    <div v-for="type in providerTypes" :key="type.id" class="provider-section">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="provider-icon">{{ type.icon }}</span>
+          <span>{{ type.name }}</span>
+        </div>
+        <el-button type="primary" size="small" @click="openAddDialog(type.id)">+ 添加实例</el-button>
+      </div>
+
+      <div v-if="getInstances(type.id).length === 0" class="empty-state">
+        <el-empty description="暂无实例" :image-size="60" />
+      </div>
+
+      <div class="instances-grid">
+        <div v-for="instance in getInstances(type.id)" :key="instance.id" class="instance-card" :class="{ disabled: !instance.enabled }">
+          <div class="instance-header">
+            <span class="instance-id">{{ instance.id }}</span>
+            <div class="instance-actions">
+              <el-tag :type="instance.enabled ? 'success' : 'info'" size="small">{{ instance.enabled ? '已启用' : '未启用' }}</el-tag>
+              <el-button link type="primary" @click="editInstance(instance)">配置</el-button>
+              <el-button link type="danger" @click="deleteInstance(instance)">删除</el-button>
+            </div>
+          </div>
+          <div class="instance-meta">
+            <span v-if="instance.version">版本: {{ instance.version }}</span>
+            <span v-if="instance.defaultModel">模型: {{ instance.defaultModel }}</span>
+            <span v-if="instance.baseUrl" class="baseurl">URL: {{ instance.baseUrl }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -502,7 +505,8 @@ onMounted(loadData)
 }
 
 .empty-state {
-  padding: 20px 0;
+  padding: 8px 0;
+  min-height: auto;
 }
 
 .instances-grid {
@@ -544,6 +548,15 @@ onMounted(loadData)
   gap: 16px;
   color: #606266;
   font-size: 13px;
+}
+
+.instance-meta .baseurl {
+  color: #909399;
+  font-size: 12px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .priority-desc {

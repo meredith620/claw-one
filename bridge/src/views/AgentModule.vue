@@ -134,8 +134,8 @@ const loadData = async () => {
 }
 
 const onModeChange = () => {
-  // 模式切换时自动保存
-  saveAgents()
+  // 只切换模式，不自动保存，避免递归
+  // 用户点击保存按钮时才保存
 }
 
 const openAddDialog = () => {
