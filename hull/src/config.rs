@@ -46,20 +46,23 @@ impl ConfigManager {
     fn get_openclaw_home_from_settings() -> String {
         // 尝试从环境变量获取配置文件路径
         let config_file = std::env::var("CLAW_ONE_CONFIG")
-            .or_else(|_| {
-                // 尝试从可执行文件路径推导
+            .ok()
+            .or_else(|| {
+                // 尝试从可执行文件路径推导: bin/../config/claw-one.toml
                 std::env::current_exe()
                     .ok()
-                    .and_then(|exe| exe.parent().map(|p| p.parent().map(|pp| pp.to_path_buf())))
-                    .flatten()
-                    .map(|dir| dir.join("config").join("claw-one.toml").to_string_lossy().to_string())
+                    .and_then(|exe| {
+                        let parent = exe.parent()?;  // bin/
+                        let grandparent = parent.parent()?;  // 安装目录
+                        Some(grandparent.join("config").join("claw-one.toml").to_string_lossy().to_string())
+                    })
             })
-            .or_else(|_| {
+            .or_else(|| {
                 // 使用默认路径
                 dirs::home_dir()
                     .map(|h| h.join("claw-one").join("config").join("claw-one.toml").to_string_lossy().to_string())
             })
-            .unwrap_or_else(|_| "~/.claw-one/config/claw-one.toml".to_string());
+            .unwrap_or_else(|| "~/.claw-one/config/claw-one.toml".to_string());
         
         // 解析 TOML 获取 openclaw_home
         if let Ok(content) = std::fs::read_to_string(&config_file) {
