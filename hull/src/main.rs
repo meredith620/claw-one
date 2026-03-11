@@ -293,9 +293,9 @@ async fn stop_service() {
         return;
     }
 
-    // 否则查找并终止进程
+    // 否则查找并终止进程（使用精确匹配）
     let output = Command::new("pkill")
-        .args(["-f", "claw-one"])
+        .args(["-f", "claw-one (run|start)$"])
         .output();
 
     match output {
@@ -317,9 +317,9 @@ async fn restart_service() {
 
 /// 查看状态
 async fn show_status() {
-    // 检查进程是否在运行
+    // 检查进程是否在运行（使用精确匹配）
     let output = Command::new("pgrep")
-        .args(["-f", "claw-one"])
+        .args(["-f", "claw-one (run|start)$"])
         .output();
 
     let is_running = matches!(output, Ok(o) if o.status.success());
@@ -472,8 +472,10 @@ fn show_config() {
 
 /// 检查服务是否运行
 async fn is_running() -> bool {
+    // 使用更精确的匹配：只匹配 'claw-one run' 或 'claw-one start' 进程
+    // 排除 openclaw-gateway 等其他包含 claw-one 的进程
     Command::new("pgrep")
-        .args(["-f", "claw-one"])
+        .args(["-f", "claw-one (run|start)$"])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
