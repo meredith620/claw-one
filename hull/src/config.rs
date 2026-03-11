@@ -64,30 +64,41 @@ impl ConfigManager {
             })
             .unwrap_or_else(|| "~/.claw-one/config/claw-one.toml".to_string());
         
+        eprintln!("[DEBUG] ConfigManager: 尝试读取 claw-one.toml: {}", config_file);
+        
         // 解析 TOML 获取 openclaw_home
         if let Ok(content) = std::fs::read_to_string(&config_file) {
+            eprintln!("[DEBUG] ConfigManager: 成功读取 claw-one.toml");
             // 简单解析 openclaw_home 字段
             for line in content.lines() {
                 let line = line.trim();
                 if line.starts_with("openclaw_home") {
                     if let Some(value) = line.split('=').nth(1) {
                         let value = value.trim().trim_matches('"').trim_matches('\'');
+                        eprintln!("[DEBUG] ConfigManager: 找到 openclaw_home = {}", value);
                         // 展开 ~ 为 home 目录
                         if value.starts_with("~/") {
                             if let Some(home) = dirs::home_dir() {
-                                return home.join(&value[2..]).to_string_lossy().to_string();
+                                let expanded = home.join(&value[2..]).to_string_lossy().to_string();
+                                eprintln!("[DEBUG] ConfigManager: 展开后路径 = {}", expanded);
+                                return expanded;
                             }
                         }
                         return value.to_string();
                     }
                 }
             }
+            eprintln!("[DEBUG] ConfigManager: 未在 claw-one.toml 中找到 openclaw_home 字段");
+        } else {
+            eprintln!("[DEBUG] ConfigManager: 无法读取 claw-one.toml，使用默认路径");
         }
         
         // 默认回退
-        dirs::home_dir()
+        let default_path = dirs::home_dir()
             .map(|h| h.join(".openclaw").to_string_lossy().to_string())
-            .unwrap_or_else(|| "~/.openclaw".to_string())
+            .unwrap_or_else(|| "~/.openclaw".to_string());
+        eprintln!("[DEBUG] ConfigManager: 使用默认 openclaw_home = {}", default_path);
+        default_path
     }
 
     /// 检查是否是首次配置（未初始化）
@@ -211,16 +222,41 @@ impl ConfigManager {
     pub async fn get_config(&self) -> Result<Config> {
         use tokio::fs;
         
+        eprintln!("[DEBUG] ConfigManager: 尝试读取配置 from {:?}", self.config_path);
+        
         // 确保配置文件存在
         if !self.config_path.exists() {
+            eprintln!("[DEBUG] ConfigManager: 配置文件不存在!");
             return Err(AppError::ConfigNotFound);
         }
         
         let content = fs::read_to_string(&self.config_path)
             .await
-            .map_err(|e| AppError::Io(e))?;
+            .map_err(|e| {
+                eprintln!("[DEBUG] ConfigManager: 读取文件失败: {}", e);
+                AppError::Io(e)
+            })?;
         
-        let config: Config = serde_json::from_str(&content)?;
+        eprintln!("[DEBUG] ConfigManager: 文件内容长度: {} bytes", content.len());
+        
+        let config: Config = serde_json::from_str(&content).map_err(|e| {
+            eprintln!("[DEBUG] ConfigManager: JSON 解析失败: {}", e);
+            AppError::Json(e)
+        })?;
+        
+        // 检查是否有 providers
+        if let Some(models) = config.get("models") {
+            if let Some(providers) = models.get("providers") {
+                if let Some(obj) = providers.as_object() {
+                    eprintln!("[DEBUG] ConfigManager: 找到 {} 个 providers", obj.len());
+                }
+            } else {
+                eprintln!("[DEBUG] ConfigManager: models 中无 providers");
+            }
+        } else {
+            eprintln!("[DEBUG] ConfigManager: 配置中无 models 字段");
+        }
+        
         Ok(config)
     }
 
