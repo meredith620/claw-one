@@ -298,21 +298,22 @@ fi
 
 # 处理已存在安装
 if [[ -d "$INSTALL_DIR" ]]; then
-    print_warn "目录已存在: $INSTALL_DIR"
+    print_warn "检测到已有安装: $INSTALL_DIR"
     if [[ "$AUTO_CONFIRM" != "yes" ]]; then
-        read -p "是否覆盖安装? [y/N]: " overwrite
-        if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+        read -p "是否升级安装? [Y/n]: " upgrade
+        if [[ "$upgrade" =~ ^[Nn]$ ]]; then
             print_info "取消安装"
             exit 0
         fi
     fi
-    # 备份配置
-    if [[ -d "$INSTALL_DIR/config" ]]; then
-        BACKUP="$INSTALL_DIR.config.backup.$(date +%Y%m%d%H%M%S)"
-        cp -r "$INSTALL_DIR/config" "$BACKUP/"
-        print_ok "配置已备份到: $BACKUP"
-    fi
-    rm -rf "$INSTALL_DIR"
+    # 升级安装：只删除程序文件，保留配置、数据和日志
+    print_info "升级安装，保留配置和数据..."
+    rm -rf "$INSTALL_DIR/bin" 2>/dev/null || true
+    rm -rf "$INSTALL_DIR/share" 2>/dev/null || true
+    rm -rf "$INSTALL_DIR/scripts" 2>/dev/null || true
+    rm -f "$INSTALL_DIR/uninstall.sh" 2>/dev/null || true
+    rm -f "$INSTALL_DIR/README.md" 2>/dev/null || true
+    print_ok "旧版本文件已清理"
 fi
 
 # 解压安装
@@ -324,7 +325,8 @@ MARKER_LINE=$(grep -n "__ARCHIVE_MARKER__" "$SCRIPT_PATH" | tail -1 | cut -d: -f
 ARCHIVE_START=$((MARKER_LINE + 1))
 
 mkdir -p "$INSTALL_DIR"
-tail -n +$ARCHIVE_START "$SCRIPT_PATH" | base64 -d | tar xzf - -C "$INSTALL_DIR" --strip-components=1
+tail -n +$ARCHIVE_START "$SCRIPT_PATH" | base64 -d | tar xzf - -C "$INSTALL_DIR" --strip-components=1 --skip-old-files 2>/dev/null || \
+    tail -n +$ARCHIVE_START "$SCRIPT_PATH" | base64 -d | tar xzf - -C "$INSTALL_DIR" --strip-components=1
 
 print_ok "文件已解压到: $INSTALL_DIR"
 
@@ -335,8 +337,8 @@ cd "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/data"
 mkdir -p "$INSTALL_DIR/logs"
 
-# 初始化 git
-if command -v git &> /dev/null; then
+# 初始化 git（仅在未初始化时）
+if command -v git \&> /dev/null && [[ ! -d "$INSTALL_DIR/data/.git" ]]; then
     cd "$INSTALL_DIR/data"
     git init --quiet 2>/dev/null || true
     git config user.name "Claw One" 2>/dev/null || true
