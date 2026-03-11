@@ -123,9 +123,15 @@ const loadData = async () => {
   try {
     const res = await getAgents()
     const data = res.data || {}
-    agentConfig.mode = data.mode || 'single'
+    
+    // 推断模式：如果 list 中有多个 agent 或包含非 main 的 agent，则为 multi 模式
+    const agentList = data.list || []
+    const hasCustomAgents = agentList.some((a: any) => a.id !== 'main')
+    const inferredMode = (agentList.length > 1 || hasCustomAgents) ? 'multi' : 'single'
+    
+    agentConfig.mode = data.mode || inferredMode
     agentConfig.defaults = { ...agentConfig.defaults, ...data.defaults }
-    agentConfig.list = data.list || []
+    agentConfig.list = agentList
   } catch (error: any) {
     ElMessage.error('加载失败: ' + (error.response?.data?.error || error.message))
   } finally {
