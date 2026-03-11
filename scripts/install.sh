@@ -52,7 +52,7 @@ check_existing() {
         print_warn "检测到已有安装: $INSTALL_DIR"
         echo ""
         echo "选项:"
-        echo "  1) 覆盖安装（保留数据）"
+        echo "  1) 升级安装（保留配置和数据）"
         echo "  2) 备份并重新安装"
         echo "  3) 取消安装"
         echo ""
@@ -60,16 +60,14 @@ check_existing() {
         
         case "$choice" in
             1)
-                print_info "覆盖安装..."
-                # 将配置备份到安装目录外，避免被删除
-                BACKUP_DIR="/tmp/claw-one-config-backup.$$"
-                cp -r "$INSTALL_DIR/config" "$BACKUP_DIR/" 2>/dev/null || true
-                print_ok "配置已备份到: $BACKUP_DIR"
-                rm -rf "$INSTALL_DIR"
-                # 创建新的安装目录并恢复配置
-                mkdir -p "$INSTALL_DIR"
-                mv "$BACKUP_DIR" "$INSTALL_DIR/config" 2>/dev/null || true
-                rm -rf "$BACKUP_DIR" 2>/dev/null || true
+                print_info "升级安装，保留配置和数据..."
+                # 只删除程序文件，保留配置、数据和日志
+                rm -rf "$INSTALL_DIR/bin" 2>/dev/null || true
+                rm -rf "$INSTALL_DIR/share" 2>/dev/null || true
+                rm -rf "$INSTALL_DIR/scripts" 2>/dev/null || true
+                rm -f "$INSTALL_DIR/uninstall.sh" 2>/dev/null || true
+                rm -f "$INSTALL_DIR/README.md" 2>/dev/null || true
+                print_ok "旧版本文件已清理，配置和数据已保留"
                 ;;
             2)
                 BACKUP_DIR="$INSTALL_DIR.backup.$(date +%Y%m%d%H%M%S)"
@@ -146,8 +144,10 @@ copy_files() {
 init_config() {
     print_info "初始化配置..."
     
-    # 从模板生成配置
-    if [ -f "$SHARE_DIR/config/claw-one.toml.template" ]; then
+    # 从模板生成配置（仅当配置文件不存在时）
+    if [ -f "$CONFIG_DIR/claw-one.toml" ]; then
+        print_info "检测到已有配置，跳过生成主配置"
+    elif [ -f "$SHARE_DIR/config/claw-one.toml.template" ]; then
         # 替换模板变量
         sed "s|{{HOME}}|$HOME|g" "$SHARE_DIR/config/claw-one.toml.template" \
             | sed "s|{{VERSION}}|$CLAW_ONE_VERSION|g" \
@@ -155,8 +155,10 @@ init_config() {
         print_ok "主配置已生成: ~/claw-one/config/claw-one.toml"
     fi
     
-    # OpenClaw 配置
-    if [ -f "$SHARE_DIR/config/openclaw.json.template" ]; then
+    # OpenClaw 配置（仅当不存在时）
+    if [ -f "$CONFIG_DIR/openclaw.json" ]; then
+        print_info "检测到已有 OpenClaw 配置，跳过"
+    elif [ -f "$SHARE_DIR/config/openclaw.json.template" ]; then
         cp "$SHARE_DIR/config/openclaw.json.template" "$CONFIG_DIR/openclaw.json"
         print_ok "OpenClaw 配置已生成: ~/claw-one/config/openclaw.json"
     fi
@@ -167,16 +169,21 @@ init_git_repo() {
     print_info "初始化数据目录..."
     
     cd "$DATA_DIR"
-    git init --quiet
-    git config user.name "Claw One"
-    git config user.email "dev@claw.one"
     
-    # 创建初始提交
-    echo "# Claw One Data Directory" > README.md
-    git add README.md
-    git commit -m "Initial commit" --quiet || true
-    
-    print_ok "Git 仓库已初始化"
+    # 仅在未初始化时执行 git init
+    if [ -d ".git" ]; then
+        print_info "Git 仓库已存在，跳过初始化"
+    else
+        git init --quiet
+        git config user.name "Claw One"
+        git config user.email "dev@claw.one"
+        
+        # 创建初始提交
+        echo "# Claw One Data Directory" > README.md
+        git add README.md
+        git commit -m "Initial commit" --quiet || true
+        print_ok "Git 仓库已初始化"
+    fi
 }
 
 # 创建快捷方式
