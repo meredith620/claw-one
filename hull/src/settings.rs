@@ -153,21 +153,67 @@ impl Settings {
 
     /// 从环境变量获取配置文件路径并加载
     pub fn from_env() -> anyhow::Result<Self> {
-        let config_path = std::env::var("CLAW_ONE_CONFIG")
-            .unwrap_or_else(|_| {
-                dirs::home_dir()
-                    .map(|h| h.join("claw-one").join("config").join("claw-one.toml"))
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "/etc/claw-one/claw-one.toml".to_string())
-            });
-        
-        if std::path::Path::new(&config_path).exists() {
-            Self::from_file(&config_path)
-        } else {
-            println!("⚠️  配置文件不存在: {}", config_path);
-            println!("   使用默认配置");
-            Ok(Self::default())
+        // 1. 首先检查环境变量
+        if let Ok(config_path) = std::env::var("CLAW_ONE_CONFIG") {
+            eprintln!("[DEBUG] 使用 CLAW_ONE_CONFIG 环境变量: {}", config_path);
+            if std::path::Path::new(&config_path).exists() {
+                return Self::from_file(&config_path);
+            } else {
+                eprintln!("⚠️  CLAW_ONE_CONFIG 指向的文件不存在: {}", config_path);
+            }
         }
+        
+        // 2. 尝试从可执行文件路径推导（适用于安装后的运行）
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(install_dir) = exe_path.parent().and_then(|p| p.parent()) {
+                let derived_config = install_dir.join("config").join("claw-one.toml");
+                eprintln!("[DEBUG] 尝试从可执行文件路径推导配置: {}", derived_config.display());
+                if derived_config.exists() {
+                    eprintln!("[DEBUG] 从 {} 加载配置", derived_config.display());
+                    return Self::from_file(&derived_config);
+                }
+            }
+        }
+        
+        // 3. 尝试用户主目录
+        let home_config = dirs::home_dir()
+            .map(|h| h.join("claw-one").join("config").join("claw-one.toml"));
+        
+        if let Some(ref config_path) = home_config {
+            eprintln!("[DEBUG] 尝试用户主目录配置: {}", config_path.display());
+            if config_path.exists() {
+                eprintln!("[DEBUG] 从 {} 加载配置", config_path.display());
+                return Self::from_file(config_path);
+            }
+        }
+        
+        // 4. 尝试当前目录（开发环境）
+        let cwd_config = std::env::current_dir()
+            .ok()
+            .map(|d| d.join("config").join("claw-one.toml"));
+        
+        if let Some(ref config_path) = cwd_config {
+            eprintln!("[DEBUG] 尝试当前目录配置: {}", config_path.display());
+            if config_path.exists() {
+                eprintln!("[DEBUG] 从 {} 加载配置", config_path.display());
+                return Self::from_file(config_path);
+            }
+        }
+        
+        eprintln!("⚠️  未找到配置文件，使用默认配置");
+        eprintln!("   尝试过的路径:");
+        if let Some(ref p) = home_config {
+            eprintln!("     - {}", p.display());
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent().and_then(|p| p.parent()) {
+                eprintln!("     - {}", dir.join("config/claw-one.toml").display());
+            }
+        }
+        if let Some(ref p) = cwd_config {
+            eprintln!("     - {}", p.display());
+        }
+        Ok(Self::default())
     }
 
     /// 获取数据目录（展开 ~）
