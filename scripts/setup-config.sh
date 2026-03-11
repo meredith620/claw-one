@@ -50,6 +50,31 @@ check_installation() {
     fi
 }
 
+# 初始化配置文件
+init_config() {
+    if [ ! -d "$CONFIG_DIR" ]; then
+        print_info "创建配置目录: $CONFIG_DIR"
+        mkdir -p "$CONFIG_DIR"
+    fi
+
+    if [ ! -f "$CONFIG_DIR/claw-one.toml" ]; then
+        print_info "创建默认配置文件"
+        cat > "$CONFIG_DIR/claw-one.toml" << 'EOF'
+# Claw One 配置文件
+
+# 服务端口
+port = 8080
+
+# OpenClaw 配置路径
+openclaw_home = "~/.openclaw"
+
+# 日志级别: debug, info, warn, error
+log_level = "info"
+EOF
+        print_ok "默认配置已创建"
+    fi
+}
+
 # 配置端口
 configure_port() {
     echo "[1/4] 服务端口配置"
@@ -308,11 +333,12 @@ start_service() {
 main() {
     print_header
     check_installation
+    init_config
     configure_port
     configure_openclaw
     configure_systemd
     start_service
-    
+
     echo ""
     echo "感谢使用 Claw One! 🎉"
     echo ""

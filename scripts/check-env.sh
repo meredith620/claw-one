@@ -29,17 +29,17 @@ print_header() {
 
 print_ok() {
     echo -e "${GREEN}✓${NC} $1"
-    ((CHECK_PASSED++))
+    CHECK_PASSED=$((CHECK_PASSED + 1))
 }
 
 print_warn() {
     echo -e "${YELLOW}⚠${NC} $1"
-    ((CHECK_WARNING++))
+    CHECK_WARNING=$((CHECK_WARNING + 1))
 }
 
 print_error() {
     echo -e "${RED}✗${NC} $1"
-    ((CHECK_FAILED++))
+    CHECK_FAILED=$((CHECK_FAILED + 1))
 }
 
 # 检查操作系统
