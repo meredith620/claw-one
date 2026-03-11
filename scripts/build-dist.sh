@@ -78,7 +78,11 @@ build_application() {
 
     # 创建临时目录用于输出
     OUTPUT_DIR=$(mktemp -d)
-    # 清理时先修复权限再删除（容器内root创建的文件需要修改权限）
+    # 设置输出目录权限，确保容器内用户可以写入
+    chmod 777 "$OUTPUT_DIR"
+    mkdir -p "$OUTPUT_DIR/static"
+    chmod 777 "$OUTPUT_DIR/static"
+    # 清理时先修复权限再删除（容器内创建的文件需要修改权限）
     trap "docker run --rm -v $OUTPUT_DIR:/out alpine:latest sh -c 'chmod -R 777 /out' 2>/dev/null; rm -rf $OUTPUT_DIR" EXIT
 
     echo "🔨 构建 bridge (前端)..."
@@ -88,9 +92,9 @@ build_application() {
         -v "$OUTPUT_DIR/static:/output/static" \
         -v "$NPM_CACHE:/home/builder/.npm" \
         -e NPM_CONFIG_CACHE=/home/builder/.npm \
-        -w /tmp/build \
+        -w /home/builder \
         "$BUILDER_IMAGE" \
-        sh -c "cp -r /build/bridge/* /tmp/build/ && npm install && npx vite build --outDir /output/static"
+        sh -c "cp -r /build/bridge/* /home/builder/ && npm install && npx vite build --outDir /output/static"
 
     echo "✅ 前端构建完成"
     echo ""
@@ -102,14 +106,14 @@ build_application() {
         -v "$OUTPUT_DIR:/output" \
         -v "$CARGO_REGISTRY_CACHE:/usr/local/cargo/registry" \
         -v "$CARGO_GIT_CACHE:/usr/local/cargo/git" \
-        -v "$CARGO_TARGET_CACHE:/tmp/hull-build/target" \
+        -v "$CARGO_TARGET_CACHE:/home/builder/target" \
         -e CARGO_HOME=/usr/local/cargo \
-        -e CARGO_TARGET_DIR=/tmp/hull-build/target \
-        -w /tmp/hull-build \
+        -e CARGO_TARGET_DIR=/home/builder/target \
+        -w /home/builder \
         "$BUILDER_IMAGE" \
-        sh -c "cp -r /build/hull/* /tmp/hull-build/ && cp /build/hull/Cargo.lock /tmp/hull-build/ && \
+        sh -c "cp -r /build/hull/* /home/builder/ && cp /build/hull/Cargo.lock /home/builder/ && \
                cargo build --release --target x86_64-unknown-linux-musl && \
-               cp /tmp/hull-build/target/x86_64-unknown-linux-musl/release/claw-one /output/"
+               cp /home/builder/target/x86_64-unknown-linux-musl/release/claw-one /output/"
 
     echo "✅ 后端构建完成"
     echo ""
