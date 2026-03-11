@@ -194,8 +194,9 @@ const loadData = async () => {
       const baseUrl = p.baseUrl || ''
       
       // 判断 provider 类型
+      // Moonshot: 包括 moonshot- 前缀、各种 kimi 变体
       const isMoonshot = id.startsWith('moonshot-') || 
-                         id.includes('kimi') || 
+                         id === 'kimi-coding' ||
                          baseUrl.includes('kimi.com') || 
                          baseUrl.includes('moonshot.cn') || 
                          baseUrl.includes('moonshot.ai')
@@ -204,6 +205,10 @@ const loadData = async () => {
       const isAnthropic = id.startsWith('anthropic-') || id.includes('claude') || baseUrl.includes('anthropic.com')
       
       if (isMoonshot) {
+        // 为 kimi-coding 设置正确的 version
+        if (id === 'kimi-coding' && !p.version) {
+          p.version = 'coding'
+        }
         instances.moonshot.push(p)
       } else if (isOpenAI) {
         instances.openai.push(p)
@@ -317,8 +322,9 @@ const editInstance = (instance: any) => {
   const id = instance.id || ''
   const baseUrl = instance.baseUrl || ''
   
+  // Moonshot: 包括 moonshot- 前缀、kimi-coding、各种 kimi 变体
   const isMoonshot = id.startsWith('moonshot-') || 
-                     id.includes('kimi') || 
+                     id === 'kimi-coding' ||
                      baseUrl.includes('kimi.com') || 
                      baseUrl.includes('moonshot.cn') || 
                      baseUrl.includes('moonshot.ai')
@@ -342,7 +348,8 @@ const editInstance = (instance: any) => {
   formData.apiKey = instance.apiKey || ''
   formData.defaultModel = instance.defaultModel || ''
   formData.enabled = instance.enabled !== false
-  formData.version = instance.version || 'coding'
+  // 对于 kimi-coding，默认使用 coding 版本
+  formData.version = instance.version || (id === 'kimi-coding' ? 'coding' : 'coding')
   showAddDialog.value = true
 }
 
