@@ -24,16 +24,12 @@ pub struct ConfigManager {
 impl ConfigManager {
     pub fn new() -> Self {
         // 首先尝试从 CLAW_OPENCLAW_CONFIG 获取（专门用于 openclaw.json）
-        // 否则从 Settings 的 openclaw_home 推导
         let config_path = std::env::var("CLAW_OPENCLAW_CONFIG")
             .map(PathBuf::from)
             .unwrap_or_else(|_| {
-                // 从 CLAW_ONE_CONFIG 所在的目录推导
-                // 或者使用默认路径
-                dirs::home_dir()
-                    .expect("No home directory")
-                    .join(".openclaw")
-                    .join("openclaw.json")
+                // 尝试从 claw-one.toml 读取 openclaw_home
+                let openclaw_home = Self::get_openclaw_home_from_settings();
+                PathBuf::from(openclaw_home).join("openclaw.json")
             });
         
         let git_dir = config_path.parent()
@@ -44,6 +40,51 @@ impl ConfigManager {
             config_path,
             git_dir,
         }
+    }
+    
+    /// 从 claw-one.toml 读取 openclaw_home 配置
+    fn get_openclaw_home_from_settings() -> String {
+        // 尝试从环境变量获取配置文件路径
+        let config_file = std::env::var("CLAW_ONE_CONFIG")
+            .or_else(|_| {
+                // 尝试从可执行文件路径推导
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| exe.parent().map(|p| p.parent().map(|pp| pp.to_path_buf())))
+                    .flatten()
+                    .map(|dir| dir.join("config").join("claw-one.toml").to_string_lossy().to_string())
+            })
+            .or_else(|_| {
+                // 使用默认路径
+                dirs::home_dir()
+                    .map(|h| h.join("claw-one").join("config").join("claw-one.toml").to_string_lossy().to_string())
+            })
+            .unwrap_or_else(|_| "~/.claw-one/config/claw-one.toml".to_string());
+        
+        // 解析 TOML 获取 openclaw_home
+        if let Ok(content) = std::fs::read_to_string(&config_file) {
+            // 简单解析 openclaw_home 字段
+            for line in content.lines() {
+                let line = line.trim();
+                if line.starts_with("openclaw_home") {
+                    if let Some(value) = line.split('=').nth(1) {
+                        let value = value.trim().trim_matches('"').trim_matches('\'');
+                        // 展开 ~ 为 home 目录
+                        if value.starts_with("~/") {
+                            if let Some(home) = dirs::home_dir() {
+                                return home.join(&value[2..]).to_string_lossy().to_string();
+                            }
+                        }
+                        return value.to_string();
+                    }
+                }
+            }
+        }
+        
+        // 默认回退
+        dirs::home_dir()
+            .map(|h| h.join(".openclaw").to_string_lossy().to_string())
+            .unwrap_or_else(|| "~/.openclaw".to_string())
     }
 
     /// 检查是否是首次配置（未初始化）
