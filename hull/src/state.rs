@@ -225,6 +225,33 @@ impl StateManager {
         }
     }
 
+    /// 普通重启服务（非 SafeMode 状态下使用）
+    pub async fn restart_service(&self) -> Result<()> {
+        // 执行重启
+        self.runtime_manager.restart().await?;
+
+        // 检查健康状态
+        if self.runtime_manager.wait_for_healthy().await? {
+            Ok(())
+        } else {
+            // 重启后不健康，进入 SafeMode
+            let logs = self.runtime_manager.get_logs(50).await?;
+            let error_type = RuntimeManager::classify_error(&logs)
+                .unwrap_or(ErrorType::System);
+            
+            let last_known_good = self.get_current_version().await.ok();
+            
+            self.enter_safe_mode(
+                error_type,
+                "Service failed to start after restart".to_string(),
+                false,
+                last_known_good,
+            ).await;
+            
+            Err(AppError::Runtime("Service failed to start after restart".to_string()))
+        }
+    }
+
     /// 恢复出厂设置
     pub async fn reset_to_factory(&self) -> Result<()> {
         // TODO: 实现恢复出厂设置逻辑
