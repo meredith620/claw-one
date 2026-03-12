@@ -505,8 +505,24 @@ onMounted(loadData)
 }
 
 .empty-state {
-  padding: 8px 0;
+  padding: 0;
   min-height: auto;
+}
+
+.empty-state :deep(.el-empty) {
+  padding: 4px 0;
+  margin: 0;
+}
+
+.empty-state :deep(.el-empty__image) {
+  width: 16px;
+  height: 16px;
+  margin-bottom: 2px;
+}
+
+.empty-state :deep(.el-empty__description) {
+  margin-top: 0;
+  font-size: 11px;
 }
 
 .instances-grid {
