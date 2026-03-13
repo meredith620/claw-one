@@ -16,7 +16,8 @@ log_level = "info"
 openclaw_home = "~/.openclaw"
 
 # OpenClaw 服务名称（用于 systemctl --user 命令）
-service_name = "openclaw"
+# 默认为 openclaw-gateway，如果你的服务名不同请修改
+service_name = "openclaw-gateway"
 
 # OpenClaw 健康检查端口
 health_port = 18790
