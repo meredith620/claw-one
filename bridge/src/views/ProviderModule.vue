@@ -32,32 +32,41 @@
 
     <!-- Provider 分类列表 -->
     <div v-for="type in providerTypes" :key="type.id" class="provider-section">
-      <div class="section-header">
+      <div class="section-header" :class="{ collapsed: isCollapsed(type.id) }" @click="toggleCollapse(type.id)">
         <div class="section-title">
+          <el-icon class="collapse-icon">
+            <ArrowDown v-if="!isCollapsed(type.id)" />
+            <ArrowRight v-else />
+          </el-icon>
           <span class="provider-icon">{{ type.icon }}</span>
           <span>{{ type.name }}</span>
+          <el-tag :type="getStats(type.id).enabled > 0 ? 'success' : 'info'" size="small" class="stats-tag">
+            {{ getStats(type.id).enabled }}/{{ getStats(type.id).total }}
+          </el-tag>
         </div>
-        <el-button type="primary" size="small" @click="openAddDialog(type.id)">+ 添加实例</el-button>
+        <el-button type="primary" size="small" @click.stop="openAddDialog(type.id)">+ 添加实例</el-button>
       </div>
 
-      <div v-if="getInstances(type.id).length === 0" class="empty-state">
-        <el-empty description="暂无实例" :image-size="60" />
-      </div>
+      <div v-show="!isCollapsed(type.id)">
+        <div v-if="getInstances(type.id).length === 0" class="empty-state">
+          <el-empty description="暂无实例" :image-size="60" />
+        </div>
 
-      <div class="instances-grid">
-        <div v-for="instance in getInstances(type.id)" :key="instance.id" class="instance-card" :class="{ disabled: !instance.enabled }">
-          <div class="instance-header">
-            <span class="instance-id">{{ instance.id }}</span>
-            <div class="instance-actions">
-              <el-tag :type="instance.enabled ? 'success' : 'info'" size="small">{{ instance.enabled ? '已启用' : '未启用' }}</el-tag>
-              <el-button link type="primary" @click="editInstance(instance)">配置</el-button>
-              <el-button link type="danger" @click="deleteInstance(instance)">删除</el-button>
+        <div class="instances-grid">
+          <div v-for="instance in getInstances(type.id)" :key="instance.id" class="instance-card" :class="{ disabled: !instance.enabled }">
+            <div class="instance-header">
+              <span class="instance-id">{{ instance.id }}</span>
+              <div class="instance-actions">
+                <el-tag :type="instance.enabled ? 'success' : 'info'" size="small">{{ instance.enabled ? '已启用' : '未启用' }}</el-tag>
+                <el-button link type="primary" @click="editInstance(instance)">配置</el-button>
+                <el-button link type="danger" @click="deleteInstance(instance)">删除</el-button>
+              </div>
             </div>
-          </div>
-          <div class="instance-meta">
-            <span v-if="instance.version">版本: {{ instance.version }}</span>
-            <span v-if="instance.defaultModel">模型: {{ instance.defaultModel }}</span>
-            <span v-if="instance.baseUrl" class="baseurl">URL: {{ instance.baseUrl }}</span>
+            <div class="instance-meta">
+              <span v-if="instance.version">版本: {{ instance.version }}</span>
+              <span v-if="instance.defaultModel">模型: {{ instance.defaultModel }}</span>
+              <span v-if="instance.baseUrl" class="baseurl">URL: {{ instance.baseUrl }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -126,7 +135,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import { getProviders, saveProvider, deleteProvider, getModelPriority, saveModelPriority } from '../api'
 import { useConfigValidation } from '../composables/useConfigValidation'
 
@@ -154,6 +163,9 @@ const modelPriority = reactive({
   primary: '', fallbacks: [] as string[]
 })
 
+// 折叠状态管理
+const collapsedSections = ref<Set<string>>(new Set())
+
 const showAddDialog = ref(false)
 const formData = reactive({
   id: '',
@@ -176,6 +188,26 @@ const availableModels = computed(() => {
   })
   return models
 })
+
+// 获取实例统计
+const getStats = (typeId: string) => {
+  const insts = instances[typeId] || []
+  const total = insts.length
+  const enabled = insts.filter((i: any) => i.enabled).length
+  return { total, enabled }
+}
+
+// 检查是否折叠
+const isCollapsed = (typeId: string) => collapsedSections.value.has(typeId)
+
+// 切换折叠状态
+const toggleCollapse = (typeId: string) => {
+  if (collapsedSections.value.has(typeId)) {
+    collapsedSections.value.delete(typeId)
+  } else {
+    collapsedSections.value.add(typeId)
+  }
+}
 
 // 加载数据
 const loadData = async () => {
@@ -220,6 +252,14 @@ const loadData = async () => {
       } else {
         // 其他所有 provider 归为 custom
         instances.custom.push(p)
+      }
+    })
+    
+    // 自动折叠无启用实例的 provider
+    providerTypes.forEach(type => {
+      const stats = getStats(type.id)
+      if (stats.enabled === 0) {
+        collapsedSections.value.add(type.id)
       }
     })
     
@@ -427,6 +467,10 @@ const saveInstance = async () => {
     await saveProvider(id, data)
     ElMessage.success(isEditing.value ? '配置已保存' : `实例 "${id}" 添加成功`)
     showAddDialog.value = false
+    
+    // 添加实例后自动展开
+    collapsedSections.value.delete(currentType.value)
+    
     await loadData()
   } catch (error: any) {
     ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
@@ -490,6 +534,12 @@ onMounted(loadData)
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header.collapsed {
+  margin-bottom: 0;
 }
 
 .section-title {
@@ -498,6 +548,16 @@ onMounted(loadData)
   gap: 10px;
   font-size: 16px;
   font-weight: 600;
+}
+
+.collapse-icon {
+  font-size: 14px;
+  color: #909399;
+  transition: transform 0.2s;
+}
+
+.stats-tag {
+  margin-left: 4px;
 }
 
 .provider-icon {
