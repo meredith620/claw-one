@@ -84,7 +84,7 @@ fn default_host() -> String { "0.0.0.0".to_string() }
 fn default_port() -> u16 { 8080 }
 fn default_log_level() -> String { "info".to_string() }
 fn default_openclaw_home() -> String { "~/.openclaw".to_string() }
-fn default_service_name() -> String { "openclaw".to_string() }
+fn default_service_name() -> String { "openclaw-gateway".to_string() }
 fn default_health_port() -> u16 { 18790 }
 fn default_health_timeout() -> u64 { 30 }
 fn default_data_dir() -> String { "~/.config/claw-one".to_string() }
@@ -291,7 +291,7 @@ pub fn check_config_or_exit() {
     match Settings::from_env() {
         Ok(settings) => {
             // 检查是否是默认配置
-            if settings.openclaw.service_name == "openclaw" 
+            if settings.openclaw.service_name == "openclaw-gateway" 
                 && settings.openclaw.openclaw_home == default_openclaw_home() {
                 println!("⚠️  警告: 您正在使用默认配置");
                 println!("   OpenClaw 根目录: {}", settings.openclaw_home().display());

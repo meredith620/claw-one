@@ -48,7 +48,7 @@ impl RuntimeManager {
     /// 使用默认配置创建（向后兼容）
     pub fn new() -> Self {
         Self {
-            service_name: "openclaw".to_string(),
+            service_name: "openclaw-gateway".to_string(),
             health_port: 18790,
             health_timeout: Duration::from_secs(30),
         }
