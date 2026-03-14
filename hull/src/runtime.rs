@@ -1,6 +1,7 @@
 // Runtime 管理模块
 // 负责与 OpenClaw 进程交互，通过 systemd 管理生命周期
 
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -33,6 +34,8 @@ pub struct RuntimeManager {
     health_port: u16,
     /// 健康检查超时时间
     health_timeout: Duration,
+    /// OpenClaw 安装根目录
+    openclaw_home: String,
 }
 
 impl RuntimeManager {
@@ -42,6 +45,7 @@ impl RuntimeManager {
             service_name: config.service_name.clone(),
             health_port: config.health_port,
             health_timeout: Duration::from_secs(config.health_timeout),
+            openclaw_home: config.openclaw_home.clone(),
         }
     }
 
@@ -51,6 +55,7 @@ impl RuntimeManager {
             service_name: "openclaw-gateway".to_string(),
             health_port: 18790,
             health_timeout: Duration::from_secs(30),
+            openclaw_home: "~/.openclaw".to_string(),
         }
     }
 
@@ -136,10 +141,21 @@ impl RuntimeManager {
         Ok(false)
     }
 
-    /// 检查进程是否运行（快速检查）
+    /// 检查进程是否运行（快速检查，只检查当前用户的进程）
     pub async fn is_process_running(&self) -> bool {
+        // 获取当前用户 UID
+        let uid = match std::env::var("UID") {
+            Ok(uid_str) => uid_str,
+            Err(_) => match Command::new("id").args(["-u"]).output() {
+                Ok(output) if output.status.success() => {
+                    String::from_utf8_lossy(&output.stdout).trim().to_string()
+                }
+                _ => return false,
+            },
+        };
+
         let output = Command::new("pgrep")
-            .args(["-f", "openclaw gateway"])
+            .args(["-u", &uid, "-f", "openclaw gateway"])
             .output();
 
         match output {
@@ -247,8 +263,32 @@ impl RuntimeManager {
         }
     }
 
+    /// 从 openclaw.json 配置文件中读取 gateway.port
+    fn get_gateway_port_from_config(&self) -> Option<u16> {
+        // 展开 ~ 为用户主目录
+        let config_path = if self.openclaw_home.starts_with("~/") {
+            dirs::home_dir()
+                .map(|home| home.join(&self.openclaw_home[2..]))
+                .map(|p| p.join("openclaw.json"))?
+        } else {
+            PathBuf::from(&self.openclaw_home).join("openclaw.json")
+        };
+
+        let content = std::fs::read_to_string(&config_path).ok()?;
+        let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+        
+        json.get("gateway")
+            .and_then(|g| g.get("port"))
+            .and_then(|p| p.as_u64())
+            .map(|p| p as u16)
+    }
+
     async fn http_health_check(&self) -> Result<bool> {
-        let url = format!("http://127.0.0.1:{}/health", self.health_port);
+        // 优先从 openclaw.json 读取端口，否则使用配置的 health_port
+        let port = self.get_gateway_port_from_config()
+            .unwrap_or(self.health_port);
+        
+        let url = format!("http://127.0.0.1:{}/health", port);
         
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
