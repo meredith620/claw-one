@@ -202,6 +202,46 @@ create_symlink() {
     fi
 }
 
+# 安装 systemd 用户服务
+install_systemd_service() {
+    print_info "安装 systemd 用户服务..."
+    
+    # 检查 systemd 是否可用
+    if ! command -v systemctl &> /dev/null; then
+        print_warn "未检测到 systemd，跳过服务安装"
+        print_info "可以手动启动: $BIN_DIR/claw-one run"
+        return 0
+    fi
+    
+    # 用户级 systemd 目录
+    USER_SYSTEMD_DIR="$HOME/.config/systemd/user"
+    mkdir -p "$USER_SYSTEMD_DIR"
+    
+    # 生成 service 文件
+    if [ -f "$SHARE_DIR/config/claw-one.service.template" ]; then
+        sed "s|%INSTALL_DIR%|$INSTALL_DIR|g" "$SHARE_DIR/config/claw-one.service.template" \
+            > "$USER_SYSTEMD_DIR/claw-one.service"
+        print_ok "systemd 服务文件已生成: ~/.config/systemd/user/claw-one.service"
+    else
+        print_warn "未找到服务模板，跳过服务安装"
+        return 0
+    fi
+    
+    # 重新加载 systemd 用户配置
+    systemctl --user daemon-reload
+    print_ok "systemd 配置已重载"
+    
+    # 启用服务（开机自启）
+    systemctl --user enable claw-one.service
+    print_ok "服务已启用（开机自启）"
+    
+    print_info "systemd 服务安装完成"
+    print_info "  启动: systemctl --user start claw-one"
+    print_info "  停止: systemctl --user stop claw-one"
+    print_info "  状态: systemctl --user status claw-one"
+    print_info "  日志: journalctl --user -u claw-one -f"
+}
+
 # 打印安装完成信息
 print_completion() {
     echo ""
@@ -214,19 +254,28 @@ print_completion() {
     echo "数据目录: $DATA_DIR"
     echo "日志目录: $LOGS_DIR"
     echo ""
+    echo "systemd 服务（已启用开机自启 + 自动重启）:"
+    echo "  启动: systemctl --user start claw-one"
+    echo "  停止: systemctl --user stop claw-one"
+    echo "  重启: systemctl --user restart claw-one"
+    echo "  状态: systemctl --user status claw-one"
+    echo "  日志: journalctl --user -u claw-one -f"
+    echo ""
     echo "下一步:"
     echo ""
     echo "  1. 运行配置向导:"
     echo "     $BIN_DIR/setup-config.sh"
     echo ""
-    echo "  2. 手动启动服务:"
-    echo "     $BIN_DIR/claw-one run"
-    echo ""
-    echo "  3. 或使用 systemd 用户服务:"
+    echo "  2. 启动服务:"
     echo "     systemctl --user start claw-one"
     echo ""
-    echo "  4. 访问配置界面:"
+    echo "  3. 访问配置界面:"
     echo "     http://localhost:8080"
+    echo ""
+    echo "服务特性:"
+    echo "  • 开机自动启动"
+    echo "  • 程序崩溃自动重启（Restart=always）"
+    echo "  • 5秒内最多重启3次（防频繁重启）"
     echo ""
     echo "卸载命令:"
     echo "  $INSTALL_DIR/uninstall.sh"
@@ -242,6 +291,7 @@ main() {
     init_config
     init_git_repo
     create_symlink
+    install_systemd_service
     print_completion
 }
 

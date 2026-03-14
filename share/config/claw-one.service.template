@@ -1,0 +1,27 @@
+[Unit]
+Description=Claw One Manager
+Documentation=https://github.com/meredith620/claw-one
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%INSTALL_DIR%/bin/claw-one
+WorkingDirectory=%INSTALL_DIR%
+
+# 自动重启配置
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# 环境变量
+Environment="RUST_LOG=info"
+Environment="CLAW_ONE_CONFIG=%INSTALL_DIR%/config/claw-one.toml"
+
+# 日志输出
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=claw-one
+
+[Install]
+WantedBy=default.target
