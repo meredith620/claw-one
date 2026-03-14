@@ -559,8 +559,81 @@ impl ConfigManager {
             config["models"]["providers"] = serde_json::json!({});
         }
         
+        // 构造完整的 provider 数据
+        let mut provider_data = data.clone();
+        
+        // 确保 models 数组存在（从 defaultModel 构造）
+        let default_model = data.get("defaultModel").and_then(|v| v.as_str());
+        if default_model.is_some() && data.get("models").is_none() {
+            let model_name = data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| default_model.unwrap().to_string());
+            
+            // 构造完整的模型配置
+            let model_config = serde_json::json!({
+                "id": default_model.unwrap(),
+                "name": model_name,
+                "contextWindow": 262144,
+                "maxTokens": 32768,
+                "input": ["text", "image"],
+                "reasoning": true,
+                "cost": {
+                    "input": 0,
+                    "output": 0,
+                    "cacheRead": 0,
+                    "cacheWrite": 0
+                }
+            });
+            
+            provider_data["models"] = serde_json::json!([model_config]);
+        }
+        
         // 更新指定 provider，保留其他
-        config["models"]["providers"][provider_id] = data.clone();
+        config["models"]["providers"][provider_id] = provider_data.clone();
+        
+        // 同时更新 agents.models，使模型对 agents 可用
+        let enabled = data.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+        if enabled {
+            // 获取模型ID（优先使用 defaultModel，否则使用 models 数组第一个）
+            let model_id = default_model
+                .or_else(|| {
+                    provider_data.get("models")
+                        .and_then(|m| m.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|m| m.get("id"))
+                        .and_then(|id| id.as_str())
+                });
+            
+            if let Some(model_id) = model_id {
+                // 确保 agents.defaults.models 路径存在
+                if config.get("agents").is_none() {
+                    config["agents"] = serde_json::json!({});
+                }
+                if config["agents"].get("defaults").is_none() {
+                    config["agents"]["defaults"] = serde_json::json!({});
+                }
+                if config["agents"]["defaults"].get("models").is_none() {
+                    config["agents"]["defaults"]["models"] = serde_json::json!({});
+                }
+                
+                // 构建模型引用键: provider_id/model_id
+                let model_key = format!("{}/{}", provider_id, model_id);
+                
+                // 获取模型别名（从 name 或 id 构造）
+                let alias = data
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| model_id.to_string());
+                
+                // 添加到 agents.models
+                config["agents"]["defaults"]["models"][&model_key] = serde_json::json!({
+                    "alias": alias
+                });
+            }
+        }
         
         self.save_config(&config).await?;
         Ok(())
