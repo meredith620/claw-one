@@ -7,17 +7,17 @@ use std::path::{Path, PathBuf};
 /// 应用配置
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
-    /// 服务器配置
-    #[serde(default)]
+    /// 服务器配置 - 支持扁平化和嵌套格式
+    #[serde(flatten, default)]
     pub server: ServerConfig,
-    /// OpenClaw 连接配置
-    #[serde(default)]
+    /// OpenClaw 连接配置 - 支持扁平化和嵌套格式
+    #[serde(flatten, default)]
     pub openclaw: OpenClawConfig,
-    /// 路径配置
-    #[serde(default)]
+    /// 路径配置 - 支持扁平化和嵌套格式
+    #[serde(flatten, default)]
     pub paths: PathsConfig,
-    /// 功能开关
-    #[serde(default)]
+    /// 功能开关 - 支持扁平化和嵌套格式
+    #[serde(flatten, default)]
     pub features: FeaturesConfig,
 }
 
