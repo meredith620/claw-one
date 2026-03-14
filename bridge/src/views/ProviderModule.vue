@@ -95,7 +95,7 @@
           <div class="form-hint">自定义 Provider 的 API 基础 URL</div>
         </el-form-item>
         
-        <el-form-item v-if="currentType === 'custom'" label="API 协议" required>
+        <el-form-item label="API 协议" required>
           <el-select v-model="formData.api" placeholder="选择 API 接口协议" style="width: 100%">
             <el-option label="OpenAI Chat API" value="openai-chat" />
             <el-option label="Anthropic Messages API" value="anthropic-messages" />
@@ -457,7 +457,7 @@ const saveInstance = async () => {
       apiKey: formData.apiKey,
       baseUrl: baseUrl,
       defaultModel: formData.defaultModel,
-      api: currentType.value === 'custom' ? formData.api : (currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-chat'),
+      api: formData.api || 'openai-chat',
     }
 
     // 构建完整配置进行验证
