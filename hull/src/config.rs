@@ -413,11 +413,21 @@ impl ConfigManager {
     }
 
     pub async fn git_add(&self, path: &str) -> Result<()> {
+        // 如果 path 是 "."，改为只添加配置文件，避免添加子目录中的其他 git 仓库
+        let target = if path == "." {
+            self.config_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("openclaw.json")
+        } else {
+            path
+        };
+        
         let output = Command::new("git")
             .args([
                 "-C", self.git_dir.to_str().unwrap(),
                 "add",
-                path,
+                target,
             ])
             .output()
             .map_err(|e| AppError::Git(format!("Failed to git add: {}", e)))?;
@@ -511,6 +521,9 @@ impl ConfigManager {
                         "enabled": value.get("enabled")
                             .and_then(|v| v.as_bool())
                             .unwrap_or(true),
+                        "api": value.get("api")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("anthropic-messages"),
                         "apiKey": value.get("apiKey").cloned().unwrap_or(serde_json::Value::Null),
                         "baseUrl": value.get("baseUrl").cloned().unwrap_or(serde_json::Value::Null),
                         "defaultModel": value.get("models")
