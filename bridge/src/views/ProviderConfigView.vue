@@ -116,6 +116,18 @@
           </el-radio-group>
         </el-form-item>
 
+        <el-form-item label="API 协议" required>
+          <el-select v-model="newInstance.api" placeholder="选择 API 接口协议">
+            <el-option 
+              v-for="api in getApiOptions(selectedType)" 
+              :key="api.value"
+              :label="api.label"
+              :value="api.value"
+            />
+          </el-select>
+          <div class="form-hint">OpenAI 兼容接口使用 openai-chat，Anthropic 兼容接口使用 anthropic-messages</div>
+        </el-form-item>
+
         <el-form-item label="API Key" required>
           <el-input v-model="newInstance.apiKey" type="password" placeholder="输入 API Key" show-password />
         </el-form-item>
@@ -142,6 +154,12 @@
       <el-form v-if="editingInstance" :model="editingInstance" label-width="100px">
         <el-form-item label="启用">
           <el-switch v-model="editingInstance.enabled" />
+        </el-form-item>
+        <el-form-item label="API 协议">
+          <el-select v-model="editingInstance.api" placeholder="选择 API 接口协议">
+            <el-option label="Anthropic Messages API" value="anthropic-messages" />
+            <el-option label="OpenAI Chat API" value="openai-chat" />
+          </el-select>
         </el-form-item>
         <el-form-item label="API Key">
           <el-input v-model="editingInstance.apiKey" type="password" placeholder="输入 API Key" show-password />
@@ -197,6 +215,7 @@ const modelPriority = reactive({
 const newInstance = reactive({
   name: '',
   version: 'coding',
+  api: '',
   apiKey: '',
   defaultModel: ''
 })
@@ -263,16 +282,36 @@ const getModelOptions = (typeId: string) => {
   return options[typeId] || []
 }
 
+const getApiOptions = (typeId: string) => {
+  const options: Record<string, { value: string; label: string }[]> = {
+    moonshot: [
+      { value: 'anthropic-messages', label: 'Anthropic Messages API' },
+    ],
+    openai: [
+      { value: 'openai-chat', label: 'OpenAI Chat API' },
+    ],
+    anthropic: [
+      { value: 'anthropic-messages', label: 'Anthropic Messages API' },
+    ],
+  }
+  return options[typeId] || [
+    { value: 'openai-chat', label: 'OpenAI Chat API' },
+    { value: 'anthropic-messages', label: 'Anthropic Messages API' },
+  ]
+}
+
 const openAddDialog = () => {
   newInstance.name = ''
   newInstance.apiKey = ''
   newInstance.defaultModel = ''
   newInstance.version = 'coding'
+  newInstance.api = ''
   showAddDialog.value = true
 }
 
 const addInstance = async () => {
   if (!newInstance.name) { ElMessage.error('请输入实例名称'); return }
+  if (!newInstance.api) { ElMessage.error('请选择 API 协议'); return }
   if (!newInstance.apiKey) { ElMessage.error('请输入 API Key'); return }
   if (!newInstance.defaultModel) { ElMessage.error('请选择默认模型'); return }
 
@@ -295,6 +334,7 @@ const addInstance = async () => {
       name: newInstance.name,
       version: selectedType.value === 'moonshot' ? newInstance.version : undefined,
       enabled: true,
+      api: newInstance.api,
       apiKey: newInstance.apiKey,
       baseUrl: baseUrls[selectedType.value][newInstance.version] || baseUrls[selectedType.value].default,
       defaultModel: newInstance.defaultModel,
