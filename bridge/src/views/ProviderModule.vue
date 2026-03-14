@@ -95,6 +95,14 @@
           <div class="form-hint">自定义 Provider 的 API 基础 URL</div>
         </el-form-item>
         
+        <el-form-item v-if="currentType === 'custom'" label="API 协议" required>
+          <el-select v-model="formData.api" placeholder="选择 API 接口协议" style="width: 100%">
+            <el-option label="OpenAI Chat API" value="openai-chat" />
+            <el-option label="Anthropic Messages API" value="anthropic-messages" />
+          </el-select>
+          <div class="form-hint">OpenAI 兼容接口使用 openai-chat，Anthropic 兼容接口使用 anthropic-messages</div>
+        </el-form-item>
+        
         <el-form-item label="API Key" required>
           <el-input v-model="formData.apiKey" type="password" placeholder="输入 API Key" show-password />
         </el-form-item>
@@ -173,6 +181,7 @@ const formData = reactive({
   version: 'coding',
   apiKey: '',
   baseUrl: '',
+  api: 'openai-chat',
   defaultModel: '',
   enabled: true,
 })
@@ -357,6 +366,8 @@ const openAddDialog = (typeId: string) => {
   formData.defaultModel = ''
   formData.enabled = true
   formData.version = 'coding'
+  formData.api = 'openai-chat'
+  formData.baseUrl = ''
   showAddDialog.value = true
 }
 
@@ -391,6 +402,8 @@ const editInstance = (instance: any) => {
   formData.apiKey = instance.apiKey || ''
   formData.defaultModel = instance.defaultModel || ''
   formData.enabled = instance.enabled !== false
+  formData.baseUrl = instance.baseUrl || ''
+  formData.api = instance.api || 'openai-chat'
   // 对于 kimi-coding，默认使用 coding 版本
   formData.version = instance.version || (id === 'kimi-coding' ? 'coding' : 'coding')
   showAddDialog.value = true
@@ -403,6 +416,9 @@ const saveInstance = async () => {
   }
   if (currentType.value === 'custom' && !formData.id && !isEditing.value) {
     ElMessage.error('请输入 Provider ID'); return
+  }
+  if (currentType.value === 'custom' && !formData.api && !isEditing.value) {
+    ElMessage.error('请选择 API 协议'); return
   }
   if (!formData.apiKey) { ElMessage.error('请输入 API Key'); return }
   if (!formData.defaultModel) { ElMessage.error('请选择默认模型'); return }
@@ -441,7 +457,7 @@ const saveInstance = async () => {
       apiKey: formData.apiKey,
       baseUrl: baseUrl,
       defaultModel: formData.defaultModel,
-      api: currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-completions',
+      api: currentType.value === 'custom' ? formData.api : (currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-chat'),
     }
 
     // 构建完整配置进行验证
