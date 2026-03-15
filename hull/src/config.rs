@@ -593,6 +593,7 @@ impl ConfigManager {
             "apiKey": data.get("apiKey"),
             "baseUrl": data.get("baseUrl"),
             "models": model_config,
+            "enabled": data.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
         });
         
         // 更新指定 provider
@@ -716,6 +717,52 @@ impl ConfigManager {
                     "defaults": {
                         "workspace": "~/.openclaw/workspace",
                         "agentDir": "~/.openclaw/agent",
+                        "compaction": {
+                            "mode": "safeguard"
+                        },
+                        "maxConcurrent": 4,
+                        "subagents": {
+                            "maxConcurrent": 8
+                        },
+                        "memorySearch": {
+                            "enabled": true,
+                            "provider": "ollama",
+                            "remote": {
+                                "baseUrl": "http://localhost:11434"
+                            },
+                            "model": "qwen3-embedding:0.6b",
+                            "fallback": "none",
+                            "sources": ["memory", "sessions"],
+                            "query": {
+                                "hybrid": {
+                                    "enabled": false,
+                                    "vectorWeight": 0.7,
+                                    "textWeight": 0.3,
+                                    "mmr": { "enabled": false },
+                                    "temporalDecay": { "enabled": false, "halfLifeDays": 30 }
+                                }
+                            },
+                            "store": {
+                                "vector": {
+                                    "enabled": false,
+                                    "extensionPath": "~/.openclaw/extensions/vec0.so"
+                                }
+                            },
+                            "sync": {
+                                "sessions": {
+                                    "deltaBytes": 100000,
+                                    "deltaMessages": 50
+                                }
+                            },
+                            "experimental": {
+                                "sessionMemory": true
+                            }
+                        },
+                        "model": {
+                            "primary": "",
+                            "fallbacks": []
+                        },
+                        "models": {}
                     },
                     "list": [],
                 })
@@ -751,6 +798,32 @@ impl ConfigManager {
                         "baseUrl": "http://localhost:11434"
                     },
                     "model": "qwen3-embedding:0.6b",
+                    "fallback": "none",
+                    "sources": ["memory", "sessions"],
+                    "query": {
+                        "hybrid": {
+                            "enabled": false,
+                            "vectorWeight": 0.7,
+                            "textWeight": 0.3,
+                            "mmr": { "enabled": false },
+                            "temporalDecay": { "enabled": false, "halfLifeDays": 30 }
+                        }
+                    },
+                    "store": {
+                        "vector": {
+                            "enabled": false,
+                            "extensionPath": "~/.openclaw/extensions/vec0.so"
+                        }
+                    },
+                    "sync": {
+                        "sessions": {
+                            "deltaBytes": 100000,
+                            "deltaMessages": 50
+                        }
+                    },
+                    "experimental": {
+                        "sessionMemory": true
+                    }
                 })
             });
         
@@ -788,7 +861,10 @@ impl ConfigManager {
                     "mattermost": {
                         "enabled": false,
                         "dmPolicy": "pairing",
-                        "accounts": {}
+                        "groupPolicy": "allowlist",
+                        "accounts": {},
+                        "allowFrom": [],
+                        "mediaLocalRoots": []
                     }
                 })
             });
