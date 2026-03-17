@@ -8,6 +8,15 @@ Type=simple
 ExecStart=%INSTALL_DIR%/bin/claw-one
 WorkingDirectory=%INSTALL_DIR%
 
+# 启动后健康检查 - 等待 openclaw gateway 的 /healthz 端点就绪
+# 使用 sh -c 执行 fetch 健康检查，超时 30 秒，最多重试 60 次
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 60); do \
+  if curl -fsS http://127.0.0.1:18789/healthz >/dev/null 2>&1; then \
+    echo "Health check passed"; exit 0; \
+  fi; \
+  sleep 0.5; \
+done; echo "Health check timed out"; exit 1'
+
 # 自动重启配置
 Restart=always
 RestartSec=5

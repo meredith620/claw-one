@@ -83,7 +83,60 @@ impl RuntimeManager {
 
     /// 重启 OpenClaw 服务
     pub async fn restart(&self) -> Result<()> {
-        self.systemctl("restart").await
+        // 获取当前进程 PID（用于后续判断重启是否完成）
+        let old_pid = self.get_process_pid().await;
+        
+        // 执行重启命令
+        self.systemctl("restart").await?;
+        
+        // 等待进程变化（旧进程停止或新进程启动）
+        let mut attempts = 0;
+        let max_attempts = 20; // 最多等待 10 秒
+        
+        while attempts < max_attempts {
+            let current_pid = self.get_process_pid().await;
+            
+            // 如果 PID 变化了，说明重启正在进行
+            if current_pid != old_pid {
+                // 再等待一小段时间让服务完全启动
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                return Ok(());
+            }
+            
+            // PID 没变，等待后重试
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            attempts += 1;
+        }
+        
+        // 超时但继续返回成功，让上层通过健康检查确认状态
+        Ok(())
+    }
+    
+    /// 获取 openclaw gateway 进程的 PID
+    async fn get_process_pid(&self) -> Option<u32> {
+        let uid = match std::env::var("UID") {
+            Ok(uid_str) => uid_str,
+            Err(_) => match Command::new("id").args(["-u"]).output() {
+                Ok(output) if output.status.success() => {
+                    String::from_utf8_lossy(&output.stdout).trim().to_string()
+                }
+                _ => return None,
+            },
+        };
+
+        let output = Command::new("pgrep")
+            .args(["-u", &uid, "-f", "openclaw gateway"])
+            .output()
+            .ok()?;
+        
+        if output.status.success() {
+            String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .parse::<u32>()
+                .ok()
+        } else {
+            None
+        }
     }
 
     /// 获取服务状态（使用 systemctl --user）
@@ -287,8 +340,9 @@ impl RuntimeManager {
         // 优先从 openclaw.json 读取端口，否则使用配置的 health_port
         let port = self.get_gateway_port_from_config()
             .unwrap_or(self.health_port);
-        
-        let url = format!("http://127.0.0.1:{}/health", port);
+
+        // 使用 /healthz 端点进行健康检查
+        let url = format!("http://127.0.0.1:{}/healthz", port);
         
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
