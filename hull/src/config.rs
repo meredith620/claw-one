@@ -587,13 +587,41 @@ impl ConfigManager {
             data.get("models").cloned().unwrap_or_else(|| serde_json::json!([]))
         };
         
+        // 验证并修正 API 类型（必须符合 OpenClaw 支持的类型）
+        let valid_api_types = vec![
+            "openai-responses",
+            "openai-completions",
+            "openai-codex-responses",
+            "anthropic-messages",
+            "google-generative-ai",
+            "github-copilot",
+            "bedrock-converse-stream",
+            "ollama",
+        ];
+        
+        let api_type = data
+            .get("api")
+            .and_then(|v| v.as_str())
+            .map(|s| {
+                // 如果是旧版 "openai-chat"，自动转换为 "openai-responses"
+                if s == "openai-chat" {
+                    "openai-responses"
+                } else if valid_api_types.contains(&s) {
+                    s
+                } else {
+                    // 默认回退
+                    "openai-responses"
+                }
+            })
+            .unwrap_or("openai-responses");
+        
         // 只保留 OpenClaw 需要的字段
+        // 注意：OpenClaw 的 provider 配置不支持 enabled 字段
         let provider_data = serde_json::json!({
-            "api": data.get("api").and_then(|v| v.as_str()).unwrap_or("openai-chat"),
+            "api": api_type,
             "apiKey": data.get("apiKey"),
             "baseUrl": data.get("baseUrl"),
             "models": model_config,
-            "enabled": data.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
         });
         
         // 更新指定 provider
@@ -716,7 +744,6 @@ impl ConfigManager {
                 serde_json::json!({
                     "defaults": {
                         "workspace": "~/.openclaw/workspace",
-                        "agentDir": "~/.openclaw/agent",
                         "compaction": {
                             "mode": "safeguard"
                         },
@@ -768,13 +795,94 @@ impl ConfigManager {
                 })
             });
         
-        Ok(agents)
+        // 过滤掉 OpenClaw 不支持的字段（mode 和 agentDir）
+        let mut agents_filtered = agents.clone();
+        if let Some(obj) = agents_filtered.as_object_mut() {
+            // 移除 mode 字段
+            obj.remove("mode");
+            // 移除 defaults.agentDir
+            if let Some(defaults) = obj.get_mut("defaults") {
+                if let Some(def_obj) = defaults.as_object_mut() {
+                    def_obj.remove("agentDir");
+                }
+            }
+        }
+        
+        Ok(agents_filtered)
     }
 
     /// 保存 Agent 模块配置
     pub async fn save_agents(&self, agents: &serde_json::Value) -> Result<()> {
         let mut config = self.get_config().await?;
-        config["agents"] = agents.clone();
+        
+        // 获取现有 agents 配置（如果存在）
+        let existing_agents = config.get("agents").cloned().unwrap_or_else(|| {
+            serde_json::json!({
+                "defaults": {
+                    "workspace": "~/.openclaw/workspace",
+                    "compaction": {"mode": "safeguard"},
+                    "maxConcurrent": 4,
+                    "subagents": {"maxConcurrent": 8},
+                    "memorySearch": {
+                        "enabled": true,
+                        "provider": "ollama",
+                        "remote": {"baseUrl": "http://localhost:11434"},
+                        "model": "qwen3-embedding:0.6b",
+                        "fallback": "none",
+                        "sources": ["memory", "sessions"],
+                        "query": {"hybrid": {"enabled": false}},
+                        "store": {"vector": {"enabled": false}},
+                        "sync": {"sessions": {"deltaBytes": 100000, "deltaMessages": 50}},
+                        "experimental": {"sessionMemory": true}
+                    },
+                    "model": {"primary": "", "fallbacks": []},
+                    "models": {}
+                },
+                "list": [],
+            })
+        });
+        
+        // 合并配置：保留现有 defaults 中前端未提供的字段
+        let merged = if let (Some(existing_obj), Some(new_obj)) = (existing_agents.as_object(), agents.as_object()) {
+            let mut result = existing_obj.clone();
+            
+            // 注意：OpenClaw 不支持 agents.mode 字段，不保存 mode
+            // 只保存 list
+            if let Some(list) = new_obj.get("list") {
+                result["list"] = list.clone();
+            }
+            
+            // 合并 defaults：前端提供的字段覆盖，未提供的保留原值
+            // 注意：OpenClaw 不支持 defaults.agentDir，需要过滤掉
+            if let Some(new_defaults) = new_obj.get("defaults") {
+                if let Some(new_def_obj) = new_defaults.as_object() {
+                    // 如果有现有的 defaults，合并；否则直接使用新的
+                    let mut merged_defaults = if let Some(existing_defaults) = existing_obj.get("defaults") {
+                        if let Some(existing_def_obj) = existing_defaults.as_object() {
+                            existing_def_obj.clone()
+                        } else {
+                            serde_json::Map::new()
+                        }
+                    } else {
+                        serde_json::Map::new()
+                    };
+                    
+                    for (key, value) in new_def_obj.iter() {
+                        // 过滤掉 OpenClaw 不支持的字段
+                        if key != "agentDir" {
+                            merged_defaults[key] = value.clone();
+                        }
+                    }
+                    result["defaults"] = serde_json::Value::Object(merged_defaults);
+                }
+            }
+            
+            serde_json::Value::Object(result)
+        } else {
+            agents.clone()
+        };
+        
+        config["agents"] = merged;
         self.save_config(&config).await?;
         Ok(())
     }

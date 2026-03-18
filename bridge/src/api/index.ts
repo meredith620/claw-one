@@ -18,6 +18,10 @@ export const getConfig = () => api.get('/config')
 export const applyConfig = (data: { config: any; message?: string }) =>
   api.post('/config', data)
 
+// 通用模块配置 API
+export const getModuleConfig = (module: string) => api.get(`/config/${module}`)
+export const saveModuleConfig = (module: string, data: any) => api.post(`/config/${module}`, data)
+
 // Provider 配置 API
 export const getProviders = () => api.get('/providers')
 export const getProvider = (id: string) => api.get(`/providers/${id}`)

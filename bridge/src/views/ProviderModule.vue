@@ -97,10 +97,14 @@
         
         <el-form-item label="API 协议" required>
           <el-select v-model="formData.api" placeholder="选择 API 接口协议" style="width: 100%">
-            <el-option label="OpenAI Chat API" value="openai-chat" />
-            <el-option label="Anthropic Messages API" value="anthropic-messages" />
+            <el-option 
+              v-for="api in apiTypeOptions" 
+              :key="api.value" 
+              :label="api.label" 
+              :value="api.value" 
+            />
           </el-select>
-          <div class="form-hint">OpenAI 兼容接口使用 openai-chat，Anthropic 兼容接口使用 anthropic-messages</div>
+          <div class="form-hint">必须符合 OpenClaw 支持的 API 类型</div>
         </el-form-item>
         
         <el-form-item label="API Key" required>
@@ -301,6 +305,16 @@ const getModelOptions = (typeId: string) => {
   return opts[typeId] || []
 }
 
+// API 类型选项（必须符合 OpenClaw 支持的类型）
+const apiTypeOptions = [
+  { value: 'openai-responses', label: 'OpenAI Responses' },
+  { value: 'openai-completions', label: 'OpenAI Completions' },
+  { value: 'openai-codex-responses', label: 'OpenAI Codex' },
+  { value: 'anthropic-messages', label: 'Anthropic Messages' },
+  { value: 'google-generative-ai', label: 'Google Gemini' },
+  { value: 'ollama', label: 'Ollama' },
+]
+
 // 分组模型选项，带描述信息
 const getModelOptionGroups = (typeId: string) => {
   const groups: Record<string, { label: string; options: { value: string; label: string; desc?: string }[] }[]> = {
@@ -366,7 +380,8 @@ const openAddDialog = (typeId: string) => {
   formData.defaultModel = ''
   formData.enabled = true
   formData.version = 'coding'
-  formData.api = 'openai-chat'
+  // 修复: 使用 OpenClaw 支持的 API 类型
+  formData.api = typeId === 'anthropic' ? 'anthropic-messages' : 'openai-responses'
   formData.baseUrl = ''
   showAddDialog.value = true
 }
@@ -403,7 +418,7 @@ const editInstance = (instance: any) => {
   formData.defaultModel = instance.defaultModel || ''
   formData.enabled = instance.enabled !== false
   formData.baseUrl = instance.baseUrl || ''
-  formData.api = instance.api || 'openai-chat'
+  formData.api = instance.api || (currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-responses')
   // 对于 kimi-coding，默认使用 coding 版本
   formData.version = instance.version || (id === 'kimi-coding' ? 'coding' : 'coding')
   showAddDialog.value = true

@@ -60,6 +60,16 @@ pub fn validate_config(config: &Value) -> ValidationResult {
     result
 }
 
+/// 仅验证 agents 配置（用于增量保存）
+pub fn validate_agents_only(config: &Value) -> ValidationResult {
+    let mut result = ValidationResult::new();
+    
+    // 只验证 agents 配置
+    validate_agents(config, &mut result);
+    
+    result
+}
+
 /// 验证顶层结构
 fn validate_structure(config: &Value, result: &mut ValidationResult) {
     // 检查是否为对象
