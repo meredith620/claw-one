@@ -193,6 +193,7 @@ async fn run_server() {
         .route("/api/state", get(api::state::handler))
         // 配置 API
         .route("/api/config", get(api::config::get_handler).post(api::config::post_handler))
+        .route("/api/config/:module", get(api::config::get_module_handler).post(api::config::save_module_handler))
         // Provider 配置 API
         .route("/api/providers", get(api::providers::list_providers))
         .route("/api/providers/:id", get(api::providers::get_provider))
