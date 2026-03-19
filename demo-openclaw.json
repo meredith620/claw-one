@@ -1,0 +1,59 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "fallbacks": [],
+        "primary": "redfrog/kimi-for-coding"
+      },
+      "models": {
+        "redfrog/kimi-for-coding": {
+          "alias": "RedFrog"
+        }
+      },
+      "workspace": "/tmp/claw-one-test-workspace"
+    },
+    "list": [
+      {
+        "id": "test-agent",
+        "name": "Test Agent",
+        "workspace": "/tmp/claw-one-test-workspace"
+      }
+    ]
+  },
+  "channels": {
+    "mattermost": {
+      "enabled": false
+    }
+  },
+  "gateway": {
+    "port": 3456
+  },
+  "models": {
+    "providers": {
+      "redfrog": {
+        "api": "anthropic-messages",
+        "apiKey": "test-key",
+        "baseUrl": "https://kimi.a7m.com.cn",
+        "models": [
+          {
+            "contextWindow": 262144,
+            "cost": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0
+            },
+            "id": "kimi-for-coding",
+            "input": [
+              "text",
+              "image"
+            ],
+            "maxTokens": 32768,
+            "name": "RedFrog",
+            "reasoning": true
+          }
+        ]
+      }
+    }
+  }
+}
