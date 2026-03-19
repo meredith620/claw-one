@@ -533,25 +533,65 @@ fn ensure_single_instance() -> anyhow::Result<()> {
     }
 }
 
-/// 日志记录中间件
+/// 日志记录中间件 - 捕获请求和错误详情
 async fn logging_middleware(
     request: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    
     let method = request.method().clone();
     let uri = request.uri().clone();
+    let headers = request.headers().clone();
     
+    // 尝试读取请求体（用于调试）
+    let (parts, body) = request.into_parts();
+    let bytes = match axum::body::to_bytes(body, usize::MAX).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            tracing::error!("读取请求体失败: {}", e);
+            return (axum::http::StatusCode::BAD_REQUEST, "读取请求体失败").into_response();
+        }
+    };
+    
+    // 重新构造请求
+    let body = axum::body::Body::from(bytes.clone());
+    let request = axum::http::Request::from_parts(parts, body);
+    
+    // 执行请求
     let response = next.run(request).await;
     let status = response.status();
     
-    if status.is_server_error() {
-        tracing::error!("{} {} -> {} (错误)", method, uri, status);
-    } else if status.is_client_error() {
-        tracing::warn!("{} {} -> {} (客户端错误)", method, uri, status);
-    } else {
-        tracing::info!("{} {} -> {}", method, uri, status);
+    // 提取响应体（如果是错误）
+    if status.is_server_error() || status.is_client_error() {
+        let (parts, body) = response.into_parts();
+        let bytes = match axum::body::to_bytes(body, usize::MAX).await {
+            Ok(bytes) => bytes,
+            Err(_) => return axum::http::Response::from_parts(parts, axum::body::Body::empty()),
+        };
+        
+        let body_str = String::from_utf8_lossy(&bytes);
+        
+        if status.is_server_error() {
+            tracing::error!(
+                "{} {} -> {} (服务器错误)\n响应: {}",
+                method, uri, status, body_str
+            );
+        } else {
+            tracing::warn!(
+                "{} {} -> {} (客户端错误)\n响应: {}",
+                method, uri, status, body_str
+            );
+        }
+        
+        // 重新构造响应
+        return axum::http::Response::from_parts(
+            parts,
+            axum::body::Body::from(bytes)
+        );
     }
     
+    tracing::info!("{} {} -> {}", method, uri, status);
     response
 }
 
