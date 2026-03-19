@@ -11,6 +11,9 @@
         },
         "test-provider/gpt-4o": {
           "alias": "gpt-4o"
+        },
+        "test/m": {
+          "alias": "m"
         }
       },
       "workspace": "/tmp/claw-one-test-workspace"
@@ -53,6 +56,30 @@
             ],
             "maxTokens": 32768,
             "name": "redfrog",
+            "reasoning": true
+          }
+        ]
+      },
+      "test": {
+        "api": "openai-responses",
+        "apiKey": "k",
+        "baseUrl": "https://test.com",
+        "models": [
+          {
+            "contextWindow": 262144,
+            "cost": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0
+            },
+            "id": "m",
+            "input": [
+              "text",
+              "image"
+            ],
+            "maxTokens": 32768,
+            "name": "m",
             "reasoning": true
           }
         ]
