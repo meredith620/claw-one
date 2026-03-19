@@ -28,8 +28,12 @@ use state::StateManager;
 #[derive(Parser)]
 #[command(name = "claw-one")]
 #[command(about = "Claw One - OpenClaw Configuration Guardian")]
-#[command(version)]
+#[command(disable_version_flag = true)]
 struct Cli {
+    /// 显示版本信息
+    #[arg(short = 'v', long)]
+    version: bool,
+
     /// 配置文件路径
     #[arg(short, long, value_name = "PATH")]
     config: Option<PathBuf>,
@@ -66,6 +70,13 @@ enum Commands {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+
+    // 处理 -v / --version 参数
+    if cli.version {
+        let git_hash = option_env!("GIT_COMMIT_HASH").unwrap_or("unknown");
+        println!("claw-one {} ({})", env!("CARGO_PKG_VERSION"), git_hash);
+        return;
+    }
 
     // 设置配置文件环境变量（如果指定）
     if let Some(config_path) = cli.config {
