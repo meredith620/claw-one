@@ -196,20 +196,14 @@ async fn run_server() {
         .route("/api/config/:module", get(api::config::get_module_handler).post(api::config::save_module_handler))
         // Provider 配置 API
         .route("/api/providers", get(api::providers::list_providers))
-        .route("/api/providers/:id", get(api::providers::get_provider))
-        .route("/api/providers/:id", post(api::providers::save_provider))
-        .route("/api/providers/:id", delete(api::providers::delete_provider))
-        .route("/api/model-priority", get(api::providers::get_model_priority))
-        .route("/api/model-priority", post(api::providers::save_model_priority))
+        .route("/api/providers/:id", get(api::providers::get_provider).post(api::providers::save_provider).delete(api::providers::delete_provider))
+        .route("/api/model-priority", get(api::providers::get_model_priority).post(api::providers::save_model_priority))
         // Agent 配置 API
-        .route("/api/agents", get(api::agents::get_agents))
-        .route("/api/agents", post(api::agents::save_agents))
+        .route("/api/agents", get(api::agents::get_agents).post(api::agents::save_agents))
         // Memory 配置 API
-        .route("/api/memory", get(api::memory::get_memory))
-        .route("/api/memory", post(api::memory::save_memory))
+        .route("/api/memory", get(api::memory::get_memory).post(api::memory::save_memory))
         // Channel 配置 API
-        .route("/api/channels", get(api::channels::get_channels))
-        .route("/api/channels", post(api::channels::save_channels))
+        .route("/api/channels", get(api::channels::get_channels).post(api::channels::save_channels))
         // 配置验证 API
         .route("/api/config/validate", post(api::config::validate_handler))
         .route("/api/snapshots", get(api::snapshots::handler))
