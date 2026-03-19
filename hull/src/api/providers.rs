@@ -36,35 +36,82 @@ pub async fn save_provider(
     Path(provider_id): Path<String>,
     Json(data): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
-    // 检查 Provider ID 是否冲突（如果是创建新实例）
-    let providers = config_manager.get_providers().await?;
+    tracing::info!("save_provider called: provider_id={}, data={:?}", provider_id, data);
+    
+    // 检查 Provider ID 是否冲突
+    let providers = match config_manager.get_providers().await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("get_providers failed: {}", e);
+            return Err(e);
+        }
+    };
+    
     let exists = providers
         .iter()
         .any(|p| p.get("id").and_then(|id| id.as_str()) == Some(&provider_id));
     
-    let is_update = data.get("_update").and_then(|v| v.as_bool()).unwrap_or(false);
+    tracing::info!("Provider exists: {}", exists);
     
-    if exists && !is_update {
-        return Err(AppError::BadRequest(format!(
-            "Provider ID '{}' already exists",
-            provider_id
-        )));
+    // 从请求数据中获取实际的 provider ID（用于判断是否更改 ID）
+    let data_id = data.get("id").and_then(|id| id.as_str()).unwrap_or(&provider_id);
+    
+    // 如果 URL 中的 ID 和数据中的 ID 不同，表示要重命名 provider
+    // 需要检查新 ID 是否已被其他 provider 使用
+    if data_id != provider_id {
+        let new_id_exists = providers
+            .iter()
+            .any(|p| {
+                let pid = p.get("id").and_then(|id| id.as_str());
+                pid == Some(data_id) && pid != Some(&provider_id)
+            });
+        
+        if new_id_exists {
+            return Err(AppError::BadRequest(format!(
+                "Provider ID '{}' already exists",
+                data_id
+            )));
+        }
     }
     
+    // 确定是更新还是创建
+    let is_update = exists;
+    
     // 保存 Provider
-    config_manager.save_provider(&provider_id, &data).await?;
+    tracing::info!("Calling save_provider for: {}", provider_id);
+    if let Err(e) = config_manager.save_provider(&provider_id, &data).await {
+        tracing::error!("save_provider failed: {}", e);
+        return Err(e);
+    }
     
     // 创建 Git 提交
+    tracing::info!("Creating git commit...");
+    if let Err(e) = config_manager.ensure_git_repo().await {
+        tracing::error!("ensure_git_repo failed: {}", e);
+        return Err(e);
+    }
+    
+    if let Err(e) = config_manager.git_add(".").await {
+        tracing::error!("git_add failed: {}", e);
+        return Err(e);
+    }
+    
     let commit_msg = if is_update {
         format!("Update provider: {}", provider_id)
     } else {
         format!("Add provider: {}", provider_id)
     };
     
-    config_manager.ensure_git_repo().await?;
-    config_manager.git_add(".").await?;
     if config_manager.has_changes().await? {
-        let commit_id = config_manager.git_commit(&commit_msg).await?;
+        let commit_id = match config_manager.git_commit(&commit_msg).await {
+            Ok(id) => id,
+            Err(e) => {
+                tracing::error!("git_commit failed: {}", e);
+                return Err(e);
+            }
+        };
+        
+        tracing::info!("Provider saved successfully with commit: {}", commit_id);
         return Ok(Json(serde_json::json!({
             "success": true,
             "provider_id": provider_id,
@@ -72,6 +119,7 @@ pub async fn save_provider(
         })));
     }
     
+    tracing::info!("Provider saved successfully (no changes)");
     Ok(Json(serde_json::json!({
         "success": true,
         "provider_id": provider_id,
