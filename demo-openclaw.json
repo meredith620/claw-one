@@ -32,7 +32,7 @@
     "providers": {
       "redfrog": {
         "api": "anthropic-messages",
-        "apiKey": "test-key",
+        "apiKey": "updated-key",
         "baseUrl": "https://kimi.a7m.com.cn",
         "models": [
           {
