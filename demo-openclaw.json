@@ -8,6 +8,9 @@
       "models": {
         "redfrog/kimi-for-coding": {
           "alias": "redfrog"
+        },
+        "test-provider/gpt-4o": {
+          "alias": "gpt-4o"
         }
       },
       "workspace": "/tmp/claw-one-test-workspace"
@@ -50,6 +53,30 @@
             ],
             "maxTokens": 32768,
             "name": "redfrog",
+            "reasoning": true
+          }
+        ]
+      },
+      "test-provider": {
+        "api": "openai-responses",
+        "apiKey": "test-api-key",
+        "baseUrl": "https://api.test.com/v1",
+        "models": [
+          {
+            "contextWindow": 262144,
+            "cost": {
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "input": 0,
+              "output": 0
+            },
+            "id": "gpt-4o",
+            "input": [
+              "text",
+              "image"
+            ],
+            "maxTokens": 32768,
+            "name": "gpt-4o",
             "reasoning": true
           }
         ]
