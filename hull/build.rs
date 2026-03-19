@@ -1,7 +1,13 @@
 use std::process::Command;
 
 fn main() {
-    // 获取 Git commit hash
+    // 优先从环境变量获取 Git commit hash（用于 Docker 构建）
+    if let Ok(git_hash) = std::env::var("GIT_COMMIT_HASH") {
+        println!("cargo:rustc-env=GIT_COMMIT_HASH={}", git_hash);
+        return;
+    }
+    
+    // 否则尝试从 git 命令获取（本地构建）
     let output = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()

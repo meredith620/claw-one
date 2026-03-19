@@ -109,6 +109,7 @@ build_application() {
         -v "$CARGO_TARGET_CACHE:/home/builder/target" \
         -e CARGO_HOME=/usr/local/cargo \
         -e CARGO_TARGET_DIR=/home/builder/target \
+        -e GIT_COMMIT_HASH="$(cd "$PROJECT_ROOT" && git rev-parse --short HEAD)" \
         -w /home/builder \
         "$BUILDER_IMAGE" \
         sh -c "cp -r /build/hull/* /home/builder/ && cp /build/hull/Cargo.lock /home/builder/ && \
