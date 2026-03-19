@@ -317,6 +317,13 @@ async fn restart_service() {
 
 /// 查看状态
 async fn show_status() {
+    // 获取版本信息
+    let version = env!("CARGO_PKG_VERSION");
+    let git_hash = option_env!("GIT_COMMIT_HASH").unwrap_or("unknown");
+    
+    println!("🐾 Claw One v{} ({})", version, git_hash);
+    println!();
+    
     // 检查进程是否在运行（使用精确匹配）
     let output = Command::new("pgrep")
         .args(["-f", "claw-one (run|start)$"])
