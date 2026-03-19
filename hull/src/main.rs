@@ -226,7 +226,8 @@ async fn run_server() {
         .route("/api/setup/reset", post(api::setup::reset_handler))
         .fallback_service(static_service)
         .layer(axum::extract::Extension(config_manager))
-        .layer(axum::extract::Extension(state_manager));
+        .layer(axum::extract::Extension(state_manager))
+        .layer(axum::middleware::from_fn(logging_middleware));
 
     let addr = SocketAddr::from((
         settings.server.host.parse::<std::net::IpAddr>().expect("Invalid host"),
@@ -530,6 +531,28 @@ fn ensure_single_instance() -> anyhow::Result<()> {
         }
         Err(_) => Err(anyhow::anyhow!("Claw One is already running")),
     }
+}
+
+/// 日志记录中间件
+async fn logging_middleware(
+    request: axum::http::Request<axum::body::Body>,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+    
+    let response = next.run(request).await;
+    let status = response.status();
+    
+    if status.is_server_error() {
+        tracing::error!("{} {} -> {} (错误)", method, uri, status);
+    } else if status.is_client_error() {
+        tracing::warn!("{} {} -> {} (客户端错误)", method, uri, status);
+    } else {
+        tracing::info!("{} {} -> {}", method, uri, status);
+    }
+    
+    response
 }
 
 async fn health_handler() -> Json<serde_json::Value> {
