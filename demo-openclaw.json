@@ -7,7 +7,7 @@
       },
       "models": {
         "redfrog/kimi-for-coding": {
-          "alias": "redfrog"
+          "alias": "kimi-for-coding"
         }
       },
       "workspace": "/tmp/claw-one-test-workspace"
@@ -49,7 +49,7 @@
               "image"
             ],
             "maxTokens": 32768,
-            "name": "redfrog",
+            "name": "kimi-for-coding",
             "reasoning": true
           }
         ]
