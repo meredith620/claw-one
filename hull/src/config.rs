@@ -223,8 +223,11 @@ impl ConfigManager {
                                 agents/*/workspace*/\n\
                                 workspace-*/\n\
                                 .git/\n";
+        
+        // 检查 .gitignore 是否需要创建或更新
+        // 支持旧格式 agents/*/workspace* 和新格式 agents/*/workspace*/
         let need_update = match tokio::fs::read_to_string(&gitignore_path).await {
-            Ok(content) => !content.contains("agents/*/workspace*/"),
+            Ok(content) => !content.contains("agents/*/workspace"),
             Err(_) => true,
         };
 
