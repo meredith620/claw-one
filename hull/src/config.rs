@@ -849,7 +849,7 @@ impl ConfigManager {
             // 注意：OpenClaw 不支持 agents.mode 字段，不保存 mode
             // 只保存 list
             if let Some(list) = new_obj.get("list") {
-                result["list"] = list.clone();
+                result.insert("list".to_string(), list.clone());
             }
             
             // 合并 defaults：前端提供的字段覆盖，未提供的保留原值
@@ -870,10 +870,11 @@ impl ConfigManager {
                     for (key, value) in new_def_obj.iter() {
                         // 过滤掉 OpenClaw 不支持的字段
                         if key != "agentDir" {
-                            merged_defaults[key] = value.clone();
+                            eprintln!("[DEBUG] Merging key: {}, value type: {:?}", key, value);
+                            merged_defaults.insert(key.clone(), value.clone());
                         }
                     }
-                    result["defaults"] = serde_json::Value::Object(merged_defaults);
+                    result.insert("defaults".to_string(), serde_json::Value::Object(merged_defaults));
                 }
             }
             
@@ -882,7 +883,12 @@ impl ConfigManager {
             agents.clone()
         };
         
-        config["agents"] = merged;
+        // 确保 config 是 Object 类型
+        if let Some(config_obj) = config.as_object_mut() {
+            config_obj.insert("agents".to_string(), merged);
+        } else {
+            return Err(AppError::Internal("配置根节点必须是对象".to_string()));
+        }
         self.save_config(&config).await?;
         Ok(())
     }
@@ -890,50 +896,15 @@ impl ConfigManager {
     // ==================== Memory 模块配置方法 ====================
 
     /// 获取 Memory 模块配置
-    pub async fn get_memory(&self) -> Result<serde_json::Value> {
+    /// 返回 None 表示配置不存在，由前端决定默认值
+    pub async fn get_memory(&self) -> Result<Option<serde_json::Value>> {
         let config = self.get_config().await?;
         
         let memory = config
             .get("agents")
             .and_then(|a| a.get("defaults"))
             .and_then(|d| d.get("memorySearch"))
-            .cloned()
-            .unwrap_or_else(|| {
-                serde_json::json!({
-                    "enabled": true,
-                    "provider": "ollama",
-                    "remote": {
-                        "baseUrl": "http://localhost:11434"
-                    },
-                    "model": "qwen3-embedding:0.6b",
-                    "fallback": "none",
-                    "sources": ["memory", "sessions"],
-                    "query": {
-                        "hybrid": {
-                            "enabled": false,
-                            "vectorWeight": 0.7,
-                            "textWeight": 0.3,
-                            "mmr": { "enabled": false },
-                            "temporalDecay": { "enabled": false, "halfLifeDays": 30 }
-                        }
-                    },
-                    "store": {
-                        "vector": {
-                            "enabled": false,
-                            "extensionPath": "~/.openclaw/extensions/vec0.so"
-                        }
-                    },
-                    "sync": {
-                        "sessions": {
-                            "deltaBytes": 100000,
-                            "deltaMessages": 50
-                        }
-                    },
-                    "experimental": {
-                        "sessionMemory": true
-                    }
-                })
-            });
+            .cloned();
         
         Ok(memory)
     }

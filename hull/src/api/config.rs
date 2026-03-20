@@ -19,12 +19,34 @@ pub async fn get_handler(
     Ok(Json(config))
 }
 
+/// 灵活的配置请求，支持两种格式：
+/// 1. 标准格式: `{ "config": {...}, "message": "..." }`
+/// 2. 直接格式: `{ ...配置内容... }` (自动检测，将整个对象作为配置)
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+pub enum FlexibleConfigRequest {
+    /// 标准格式，包含 config 和 message 字段
+    Standard {
+        config: Config,
+        #[serde(default)]
+        message: Option<String>,
+    },
+    /// 直接格式，整个对象就是配置
+    Direct(Config),
+}
+
 pub async fn post_handler(
     Extension(state_manager): Extension<Arc<StateManager>>,
-    Json(request): Json<ApplyConfigRequest>,
+    Json(request): Json<FlexibleConfigRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    // 根据请求格式提取配置和消息
+    let (config, message) = match request {
+        FlexibleConfigRequest::Standard { config, message } => (config, message),
+        FlexibleConfigRequest::Direct(config) => (config, None),
+    };
+
     // 使用 StateManager 进行事务性配置应用
-    state_manager.apply_config(request.config, request.message).await?;
+    state_manager.apply_config(config, message).await?;
 
     Ok(Json(serde_json::json!({
         "success": true,
@@ -32,10 +54,16 @@ pub async fn post_handler(
     })))
 }
 
-/// 验证配置请求
+/// 验证配置请求 - 支持两种格式：
+/// 1. 标准格式: `{ "config": {...} }`
+/// 2. 直接格式: `{ ...配置内容... }` (自动检测)
 #[derive(serde::Deserialize)]
-pub struct ValidateConfigRequest {
-    pub config: Config,
+#[serde(untagged)]
+pub enum FlexibleValidateRequest {
+    /// 标准格式，包含 config 字段
+    Standard { config: Config },
+    /// 直接格式，整个对象就是配置
+    Direct(Config),
 }
 
 /// 验证配置响应
@@ -54,9 +82,15 @@ pub struct ValidationError {
 
 /// 验证配置处理函数
 pub async fn validate_handler(
-    Json(request): Json<ValidateConfigRequest>,
+    Json(request): Json<FlexibleValidateRequest>,
 ) -> Result<Json<ValidateConfigResponse>> {
-    let result = validate_config(&request.config);
+    // 根据请求格式提取配置
+    let config = match request {
+        FlexibleValidateRequest::Standard { config } => config,
+        FlexibleValidateRequest::Direct(config) => config,
+    };
+    
+    let result = validate_config(&config);
     
     let errors: Vec<ValidationError> = result
         .errors
@@ -104,16 +138,10 @@ pub async fn get_module_handler(
 }
 
 /// 保存指定模块的配置
-#[derive(serde::Deserialize)]
-pub struct SaveModuleRequest {
-    pub config: serde_json::Value,
-}
-
 pub async fn save_module_handler(
     Path(module): Path<String>,
     Extension(config_manager): Extension<Arc<ConfigManager>>,
-    Extension(state_manager): Extension<Arc<StateManager>>,
-    Json(request): Json<SaveModuleRequest>,
+    Json(module_config): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
     // 获取当前完整配置
     let mut full_config = config_manager.get_config().await?;
@@ -121,19 +149,19 @@ pub async fn save_module_handler(
     // 根据模块名更新对应的配置
     match module.as_str() {
         "tools" => {
-            full_config["tools"] = request.config;
+            full_config["tools"] = module_config;
         }
         "session" => {
-            full_config["session"] = request.config;
+            full_config["session"] = module_config;
         }
         "agents" => {
-            full_config["agents"] = request.config;
+            full_config["agents"] = module_config;
         }
         "models" => {
-            full_config["models"] = request.config;
+            full_config["models"] = module_config;
         }
         "channels" => {
-            full_config["channels"] = request.config;
+            full_config["channels"] = module_config;
         }
         _ => {
             return Ok(Json(serde_json::json!({
@@ -143,8 +171,19 @@ pub async fn save_module_handler(
         }
     }
     
-    // 应用完整配置
-    state_manager.apply_config(full_config, Some(format!("Update {} module", module))).await?;
+    // 保存配置
+    config_manager.save_config(&full_config).await?;
+    
+    // 创建 Git 提交（如果没有变更则不提交）
+    config_manager.ensure_git_repo().await?;
+    config_manager.git_add(".").await?;
+    if config_manager.has_changes().await? {
+        let commit_id = config_manager.git_commit(&format!("Update {} module", module)).await?;
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        })));
+    }
     
     Ok(Json(serde_json::json!({
         "success": true,

@@ -10,11 +10,12 @@ use crate::{
 };
 
 /// 获取 Memory 配置
+/// 如果配置不存在，返回 null (serde_json::Value::Null)
 pub async fn get_memory(
     Extension(config_manager): Extension<Arc<ConfigManager>>,
 ) -> Result<Json<serde_json::Value>> {
     let memory = config_manager.get_memory().await?;
-    Ok(Json(memory))
+    Ok(Json(memory.unwrap_or(serde_json::Value::Null)))
 }
 
 /// 保存 Memory 配置
