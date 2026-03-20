@@ -146,29 +146,28 @@ pub async fn save_module_handler(
     // 获取当前完整配置
     let mut full_config = config_manager.get_config().await?;
     
-    // 根据模块名更新对应的配置
-    match module.as_str() {
-        "tools" => {
-            full_config["tools"] = module_config;
+    // 根据模块名更新对应的配置（deep merge，保留已有子字段）
+    let valid_modules = ["tools", "session", "agents", "models", "channels"];
+    if !valid_modules.contains(&module.as_str()) {
+        return Ok(Json(serde_json::json!({
+            "success": false,
+            "message": format!("Unknown module: {}", module),
+        })));
+    }
+    
+    // Deep merge: 将传入的字段合并到现有配置，而非整体替换
+    if let Some(existing) = full_config.get(&module).cloned() {
+        if existing.is_object() && module_config.is_object() {
+            let mut merged = existing;
+            for (key, value) in module_config.as_object().unwrap() {
+                merged[key] = value.clone();
+            }
+            full_config[&module] = merged;
+        } else {
+            full_config[&module] = module_config;
         }
-        "session" => {
-            full_config["session"] = module_config;
-        }
-        "agents" => {
-            full_config["agents"] = module_config;
-        }
-        "models" => {
-            full_config["models"] = module_config;
-        }
-        "channels" => {
-            full_config["channels"] = module_config;
-        }
-        _ => {
-            return Ok(Json(serde_json::json!({
-                "success": false,
-                "message": format!("Unknown module: {}", module),
-            })));
-        }
+    } else {
+        full_config[&module] = module_config;
     }
     
     // 使用 sync_to_version_config 完成：保存 + 复制 + diff + Git 提交
