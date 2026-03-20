@@ -197,7 +197,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
-import { getAgents, saveAgents, getModuleConfig, saveModuleConfig } from '../api'
+import { getAgents, saveAgents as saveAgentsApi, getModuleConfig, saveModuleConfig } from '../api'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -399,7 +399,7 @@ const saveAgents = async () => {
       archiveAfterMinutes: subagentConfig.archiveAfterMinutes
     }
     
-    await saveAgents({
+    await saveAgentsApi({
       defaults: defaultsToSend,
       list: agentConfig.list
     })

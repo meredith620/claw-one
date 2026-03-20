@@ -265,6 +265,12 @@ impl StateManager {
     // 私有辅助方法
 
     async fn get_current_version(&self) -> Result<String> {
+        // 优先使用编译时嵌入的 Git commit hash
+        if let Some(git_hash) = option_env!("GIT_COMMIT_HASH") {
+            return Ok(git_hash.to_string());
+        }
+        
+        // 回退：从配置 Git 仓库获取最新 commit
         let snapshots = self.config_manager.list_snapshots().await?;
         snapshots
             .first()
