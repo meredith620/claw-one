@@ -25,16 +25,22 @@ pub async fn save_memory(
 ) -> Result<Json<serde_json::Value>> {
     config_manager.save_memory(&data).await?;
     
-    // 创建 Git 提交
-    config_manager.ensure_git_repo().await?;
-    config_manager.git_add(".").await?;
-    if config_manager.has_changes().await? {
-        let commit_id = config_manager.git_commit("Update memory config").await?;
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "commit": commit_id,
-        })));
-    }
+    // 读取当前完整配置并同步到 version-config/
+    let config = config_manager.get_config().await?;
     
-    Ok(Json(serde_json::json!({"success": true})))
+    match config_manager.sync_to_version_config(&config, Some("Update memory config".to_string())).await {
+        Ok(Some(commit_id)) => {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "commit": commit_id,
+            })));
+        }
+        Ok(None) => {
+            return Ok(Json(serde_json::json!({"success": true})));
+        }
+        Err(e) => {
+            tracing::error!("save_memory: sync_to_version_config failed: {}", e);
+            return Err(e);
+        }
+    }
 }

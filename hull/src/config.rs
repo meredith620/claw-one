@@ -12,13 +12,23 @@ use crate::{
 const FACTORY_CONFIG_FILE: &str = "factory-config.json";
 /// 首次配置标记文件名
 const INIT_FLAG_FILE: &str = ".initialized";
+/// 版本控制目录名
+const VERSION_CONFIG_DIR: &str = "version-config";
 
 /// 配置管理器 - 负责配置文件的读写和 Git 版本控制
+/// 设计原则：
+/// 1. 主配置文件 (~/.openclaw/openclaw.json) 是运行时读写的主文件
+/// 2. version-config/ 目录是 Git 版本控制的隔离区域
+/// 3. 保存时复制到 version-config/，diff 验证后再 Git 提交
 pub struct ConfigManager {
-    /// 配置文件路径（如 ~/.openclaw/openclaw.json）
+    /// 主配置文件路径（如 ~/.openclaw/openclaw.json）
     config_path: PathBuf,
-    /// Git 仓库目录（配置文件的父目录）
+    /// 主目录（配置文件的父目录，如 ~/.openclaw/）
     git_dir: PathBuf,
+    /// 版本控制目录（如 ~/.openclaw/version-config/）
+    version_config_dir: PathBuf,
+    /// 版本控制中的配置文件路径（如 ~/.openclaw/version-config/openclaw.json）
+    version_config_path: PathBuf,
 }
 
 impl ConfigManager {
@@ -36,9 +46,15 @@ impl ConfigManager {
             .expect("Invalid config path")
             .to_path_buf();
         
+        // 版本控制目录：~/.openclaw/version-config/
+        let version_config_dir = git_dir.join(VERSION_CONFIG_DIR);
+        let version_config_path = version_config_dir.join("openclaw.json");
+        
         Self {
             config_path,
             git_dir,
+            version_config_dir,
+            version_config_path,
         }
     }
     
@@ -101,6 +117,146 @@ impl ConfigManager {
         default_path
     }
 
+    /// 自动迁移旧版 Git 仓库到 version-config/ 目录
+    /// 
+    /// 检测逻辑：
+    /// - 如果 ~/.openclaw/.git 存在且 ~/.openclaw/version-config/.git 不存在 → 需要迁移
+    /// 
+    /// 迁移步骤：
+    /// 1. 创建 version-config/ 目录
+    /// 2. 复制当前 openclaw.json 到 version-config/
+    /// 3. 移动 .git 目录到 version-config/
+    /// 4. 更新 Git 工作目录配置
+    pub async fn migrate_legacy_git_repo(&self) -> Result<bool> {
+        let old_git_dir = self.git_dir.join(".git");
+        let new_git_dir = self.version_config_dir.join(".git");
+        
+        // 检查是否需要迁移
+        if !old_git_dir.exists() {
+            tracing::info!("No legacy Git repo found, skip migration");
+            return Ok(false);
+        }
+        
+        if new_git_dir.exists() {
+            tracing::info!("version-config/.git already exists, skip migration");
+            return Ok(false);
+        }
+        
+        tracing::info!("Migrating legacy Git repo to version-config/");
+        
+        // 1. 确保 version-config/ 目录存在
+        if !self.version_config_dir.exists() {
+            fs::create_dir_all(&self.version_config_dir).await
+                .map_err(|e| AppError::Runtime(format!("Failed to create version-config dir: {}", e)))?;
+        }
+        
+        // 2. 复制当前配置文件到 version-config/（如果不存在）
+        if self.config_path.exists() && !self.version_config_path.exists() {
+            fs::copy(&self.config_path, &self.version_config_path).await
+                .map_err(|e| AppError::Runtime(format!("Failed to copy config: {}", e)))?;
+            tracing::info!("Copied openclaw.json to version-config/");
+        }
+        
+        // 3. 移动 .git 目录
+        // 使用 tokio::fs::rename 是原子操作，但如果跨设备可能失败，这时需要手动复制
+        match fs::rename(&old_git_dir, &new_git_dir).await {
+            Ok(_) => {
+                tracing::info!("Moved .git to version-config/");
+            }
+            Err(e) => {
+                // 可能是跨设备，尝试复制后删除
+                tracing::warn!("Rename failed (cross-device?), trying copy+remove: {}", e);
+                Self::copy_dir_recursive(&old_git_dir, &new_git_dir).await?;
+                fs::remove_dir_all(&old_git_dir).await
+                    .map_err(|e| AppError::Runtime(format!("Failed to remove old .git: {}", e)))?;
+                tracing::info!("Copied .git to version-config/ and removed old one");
+            }
+        }
+        
+        // 4. 更新 Git 工作目录配置（指向新的路径）
+        let output = Command::new("git")
+            .args([
+                "-C", self.version_config_dir.to_str().unwrap(),
+                "config", "--local", "core.worktree",
+                self.version_config_dir.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|e| AppError::Git(format!("Failed to update git worktree: {}", e)))?;
+        
+        if !output.status.success() {
+            return Err(AppError::Git(
+                String::from_utf8_lossy(&output.stderr).to_string()
+            ));
+        }
+        
+        // 5. 更新 Git 索引（重新索引新位置的文件）
+        let output = Command::new("git")
+            .args([
+                "-C", self.version_config_dir.to_str().unwrap(),
+                "add", "-A",
+            ])
+            .output()
+            .map_err(|e| AppError::Git(format!("Failed to update git index: {}", e)))?;
+        
+        if !output.status.success() {
+            tracing::warn!("Git add -A output: {}", String::from_utf8_lossy(&output.stderr));
+        }
+        
+        // 6. 验证迁移后的仓库状态
+        let output = Command::new("git")
+            .args([
+                "-C", self.version_config_dir.to_str().unwrap(),
+                "status", "--short",
+            ])
+            .output()
+            .map_err(|e| AppError::Git(format!("Failed to check git status: {}", e)))?;
+        
+        let status_output = String::from_utf8_lossy(&output.stdout);
+        if !status_output.is_empty() {
+            tracing::warn!("Git status after migration:\n{}", status_output);
+            // 如果有未提交的变更，创建一个迁移提交
+            let output = Command::new("git")
+                .args([
+                    "-C", self.version_config_dir.to_str().unwrap(),
+                    "commit", "-m", "Migrate to version-config layout",
+                ])
+                .output()
+                .map_err(|e| AppError::Git(format!("Failed to create migration commit: {}", e)))?;
+            
+            if output.status.success() {
+                tracing::info!("Created migration commit");
+            }
+        }
+        
+        tracing::info!("Migration completed successfully");
+        Ok(true)
+    }
+    
+    /// 递归复制目录（用于跨设备迁移 .git）
+    async fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
+        fs::create_dir_all(dst).await
+            .map_err(|e| AppError::Runtime(format!("Failed to create dir {:?}: {}", dst, e)))?;
+        
+        let mut entries = fs::read_dir(src).await
+            .map_err(|e| AppError::Runtime(format!("Failed to read dir {:?}: {}", src, e)))?;
+        
+        while let Some(entry) = entries.next_entry().await
+            .map_err(|e| AppError::Runtime(format!("Failed to read entry: {}", e)))? 
+        {
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            
+            if entry.file_type().await.map_err(|e| AppError::Runtime(format!("Failed to get file type: {}", e)))?.is_dir() {
+                Box::pin(Self::copy_dir_recursive(&src_path, &dst_path)).await?;
+            } else {
+                fs::copy(&src_path, &dst_path).await
+                    .map_err(|e| AppError::Runtime(format!("Failed to copy file: {}", e)))?;
+            }
+        }
+        
+        Ok(())
+    }
+
     /// 检查是否是首次配置（未初始化）
     pub async fn is_first_setup(&self) -> Result<bool> {
         // 检查初始化标记文件
@@ -157,10 +313,15 @@ impl ConfigManager {
     }
 
     /// 恢复出厂设置
+    /// 
+    /// 流程：
+    /// 1. 加载 factory-config.json（如果不存在则创建最小配置）
+    /// 2. 保存到主配置文件
+    /// 3. 同步到 version-config/ 并创建 Git 提交
     pub async fn reset_to_factory(&self) -> Result<Config> {
         let factory_path = self.git_dir.join(FACTORY_CONFIG_FILE);
         
-        if !factory_path.exists() {
+        let config = if !factory_path.exists() {
             // 如果没有出厂配置，创建最小配置
             let minimal: Config = serde_json::json!({
                 "version": "1.0",
@@ -172,30 +333,32 @@ impl ConfigManager {
                 "channels": []
             });
             self.save_factory_config(&minimal).await?;
-            return Ok(minimal);
-        }
+            minimal
+        } else {
+            let content = fs::read_to_string(&factory_path).await?;
+            serde_json::from_str(&content)?
+        };
         
-        let content = fs::read_to_string(&factory_path).await?;
-        let config: Config = serde_json::from_str(&content)?;
-        
-        // 应用出厂配置
-        self.save_config(&config).await?;
-        
-        // 创建 Git 提交记录
-        self.ensure_git_repo().await?;
-        self.git_add(".").await?;
-        self.git_commit("Reset to factory settings").await?;
+        // 使用 sync_to_version_config 完成：保存 + 复制 + diff + Git 提交
+        self.sync_to_version_config(&config, Some("Reset to factory settings".to_string())).await?;
         
         Ok(config)
     }
 
     /// 确保 Git 仓库已初始化
+    /// 在 version-config/ 目录中初始化 Git，实现运行时数据与版本控制完全隔离
     pub async fn ensure_git_repo(&self) -> Result<()> {
-        let git_path = self.git_dir.join(".git");
+        // 确保 version-config/ 目录存在
+        if !self.version_config_dir.exists() {
+            fs::create_dir_all(&self.version_config_dir).await
+                .map_err(|e| AppError::Git(format!("Failed to create version-config dir: {}", e)))?;
+        }
+        
+        let git_path = self.version_config_dir.join(".git");
         if !git_path.exists() {
-            // 初始化 Git 仓库
+            // 在 version-config/ 中初始化 Git 仓库
             let output = Command::new("git")
-                .args(["init", self.git_dir.to_str().unwrap()])
+                .args(["init", self.version_config_dir.to_str().unwrap()])
                 .output()
                 .map_err(|e| AppError::Git(format!("Failed to init git repo: {}", e)))?;
 
@@ -209,55 +372,7 @@ impl ConfigManager {
             self.git_config("user.name", "Claw One").await?;
             self.git_config("user.email", "dev@claw.one").await?;
 
-            // 如果配置文件存在，创建初始提交
-            if self.config_path.exists() {
-                self.git_add(".").await?;
-                self.git_commit("Initial config").await?;
-            }
-        }
-
-        // 确保 .gitignore 存在（无论 Git 仓库是否新创建）
-        // 设计原则：只用 Git 管理 openclaw.json，不管理其他文件
-        let gitignore_path = self.git_dir.join(".gitignore");
-        let gitignore_content = "# Claw One Git 配置\n\
-                                # 设计：仅管理 openclaw.json\n\
-                                # 排除 agents 目录\n\
-                                agents/\n\
-                                # 排除 workspace 目录\n\
-                                workspace-*/\n";
-        
-        let need_update = match tokio::fs::read_to_string(&gitignore_path).await {
-            Ok(content) => !content.contains("agents/"),
-            Err(_) => true,
-        };
-
-        if need_update {
-            tokio::fs::write(&gitignore_path, gitignore_content).await
-                .map_err(|e| AppError::Git(format!("Failed to create/update .gitignore: {}", e)))?;
-            
-            // 如果 Git 仓库已存在，立即添加并提交 .gitignore
-            if git_path.exists() {
-                // 添加 .gitignore 到 Git
-                let output = Command::new("git")
-                    .args([
-                        "-C", self.git_dir.to_str().unwrap(),
-                        "add", ".gitignore",
-                    ])
-                    .output()
-                    .map_err(|e| AppError::Git(format!("Failed to git add .gitignore: {}", e)))?;
-                
-                if !output.status.success() {
-                    tracing::warn!("git add .gitignore failed: {}", String::from_utf8_lossy(&output.stderr));
-                }
-                
-                // 尝试提交 .gitignore（如果工作区有变更）
-                let _ = Command::new("git")
-                    .args([
-                        "-C", self.git_dir.to_str().unwrap(),
-                        "commit", "-m", "Update .gitignore",
-                    ])
-                    .output();
-            }
+            tracing::info!("Git repo initialized in version-config/");
         }
 
         Ok(())
@@ -321,38 +436,32 @@ impl ConfigManager {
     }
 
     /// 应用配置并创建 Git 提交
+    /// 
+    /// 流程：
+    /// 1. 保存配置到主文件 (~/.openclaw/openclaw.json)
+    /// 2. 复制到 version-config/ 目录
+    /// 3. diff 验证两个文件一致
+    /// 4. 在 version-config/ 中执行 Git 提交
     pub async fn apply_config(
         &self,
         config: Config,
         message: Option<String>,
     ) -> Result<String> {
-        // 1. 确保 Git 仓库已初始化
-        self.ensure_git_repo().await?;
-        
-        // 2. 保存配置到文件
-        self.save_config(&config).await?;
-        
-        // 3. 添加到 Git
-        self.git_add(".").await?;
-        
-        // 4. 检查是否有变更
-        if !self.has_changes().await? {
-            return Err(AppError::Runtime("No changes to commit".to_string()));
-        }
-        
-        // 5. 创建提交
+        // 使用 sync_to_version_config 完成完整流程
         let commit_msg = message.unwrap_or_else(|| {
             format!("Config update at {}", Utc::now().to_rfc3339())
         });
-        let commit_id = self.git_commit(&commit_msg).await?;
         
-        Ok(commit_id)
+        match self.sync_to_version_config(&config, Some(commit_msg)).await? {
+            Some(commit_id) => Ok(commit_id),
+            None => Err(AppError::Runtime("No changes to commit".to_string())),
+        }
     }
 
     /// 获取快照列表（最近的 Git 提交）
     pub async fn list_snapshots(&self) -> Result<Vec<Snapshot>> {
         // 如果 Git 仓库不存在，返回空列表
-        let git_path = self.git_dir.join(".git");
+        let git_path = self.version_config_dir.join(".git");
         if !git_path.exists() {
             return Ok(vec![]);
         }
@@ -360,7 +469,7 @@ impl ConfigManager {
         // 使用 git log 获取提交历史
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "log",
                 "--pretty=format:%H|%ci|%s",
                 "-n", "100",  // 最近 100 条
@@ -391,9 +500,14 @@ impl ConfigManager {
     }
 
     /// 回滚到指定版本
+    /// 
+    /// 流程：
+    /// 1. 从 version-config/ Git 仓库检出指定版本的 openclaw.json
+    /// 2. 将检出后的文件复制回主配置路径
+    /// 3. 创建回滚提交记录
     pub async fn rollback(&self, snapshot_id: &str) -> Result<()> {
         // 1. 检查 Git 仓库
-        let git_path = self.git_dir.join(".git");
+        let git_path = self.version_config_dir.join(".git");
         if !git_path.exists() {
             return Err(AppError::Git("Git repository not initialized".to_string()));
         }
@@ -404,14 +518,14 @@ impl ConfigManager {
             return Err(AppError::Git(format!("Snapshot {} not found", snapshot_id)));
         }
         
-        // 3. 执行 git checkout
+        // 3. 执行 git checkout 到 version-config/openclaw.json
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "checkout",
                 snapshot_id,
                 "--",
-                self.config_path.file_name().unwrap().to_str().unwrap(),
+                "openclaw.json",
             ])
             .output()
             .map_err(|e| AppError::Git(format!("Failed to checkout: {}", e)))?;
@@ -422,8 +536,21 @@ impl ConfigManager {
             ));
         }
         
-        // 4. 创建回滚提交记录
-        self.git_add(".").await?;
+        // 4. 将 version-config/openclaw.json 复制回主配置路径
+        fs::copy(&self.version_config_path, &self.config_path).await
+            .map_err(|e| AppError::Io(e))?;
+        
+        // 5. diff 验证
+        let version_content = fs::read_to_string(&self.version_config_path).await?;
+        let main_content = fs::read_to_string(&self.config_path).await?;
+        if version_content != main_content {
+            return Err(AppError::Runtime(
+                "Rollback failed: config file mismatch after copy".to_string()
+            ));
+        }
+        
+        // 6. 创建回滚提交记录
+        self.git_add("openclaw.json").await?;
         let msg = format!("Rollback to {}", &snapshot_id[..8]);
         self.git_commit(&msg).await?;
         
@@ -441,7 +568,7 @@ impl ConfigManager {
     async fn git_config(&self, key: &str, value: &str) -> Result<()> {
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "config",
                 key,
                 value,
@@ -458,20 +585,14 @@ impl ConfigManager {
     }
 
     /// Git add 操作
-    /// 设计原则：只用 Git 管理 openclaw.json，其他文件不被管理
-    /// 即使传入 "."，也只会添加 openclaw.json
+    /// 设计原则：只在 version-config/ 目录中操作，管理 version-config/openclaw.json
     pub async fn git_add(&self, _path: &str) -> Result<()> {
-        // 强制只添加 openclaw.json，忽略传入的 path 参数
-        let target = self.config_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("openclaw.json");
-        
+        // 在 version-config/ 目录中添加 openclaw.json
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "add",
-                target,
+                "openclaw.json",
             ])
             .output()
             .map_err(|e| AppError::Git(format!("Failed to git add: {}", e)))?;
@@ -487,7 +608,7 @@ impl ConfigManager {
     pub async fn git_commit(&self, message: &str) -> Result<String> {
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "commit",
                 "-m", message,
             ])
@@ -503,7 +624,7 @@ impl ConfigManager {
         // 获取最新提交的 hash
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "rev-parse",
                 "HEAD",
             ])
@@ -517,7 +638,7 @@ impl ConfigManager {
     pub async fn has_changes(&self) -> Result<bool> {
         let output = Command::new("git")
             .args([
-                "-C", self.git_dir.to_str().unwrap(),
+                "-C", self.version_config_dir.to_str().unwrap(),
                 "status",
                 "--porcelain",
             ])
@@ -527,7 +648,62 @@ impl ConfigManager {
         Ok(!output.stdout.is_empty())
     }
 
-    // ==================== 模块级配置方法 ====================
+    /// 同步配置到 version-config/ 目录并执行 Git 提交
+    /// 核心逻辑：
+    /// 1. 将主配置复制到 version-config/openclaw.json
+    /// 2. diff 验证两个文件内容一致
+    /// 3. 在 version-config/ 中执行 Git add & commit
+    pub async fn sync_to_version_config(&self,
+        config: &Config,
+        commit_msg: Option<String>,
+    ) -> Result<Option<String>> {
+        // 1. 确保 version-config/ 目录存在
+        if !self.version_config_dir.exists() {
+            fs::create_dir_all(&self.version_config_dir).await
+                .map_err(|e| AppError::Git(format!("Failed to create version-config dir: {}", e)))?;
+        }
+
+        // 2. 确保 Git 仓库已初始化
+        self.ensure_git_repo().await?;
+
+        // 3. 将配置序列化为 JSON
+        let config_json = serde_json::to_string_pretty(config)
+            .map_err(|e| AppError::Runtime(format!("Failed to serialize config: {}", e)))?;
+
+        // 4. 写入主配置文件
+        fs::write(&self.config_path, &config_json).await?;
+
+        // 5. 复制到 version-config/
+        fs::write(&self.version_config_path, &config_json).await?;
+
+        // 6. diff 验证：读取两个文件并比较
+        let original_content = fs::read_to_string(&self.config_path).await?;
+        let copied_content = fs::read_to_string(&self.version_config_path).await?;
+
+        if original_content != copied_content {
+            return Err(AppError::Runtime(
+                "Diff验证失败：version-config/openclaw.json 与主配置文件内容不一致".to_string()
+            ));
+        }
+
+        tracing::info!("Config synced to version-config/ and diff verified");
+
+        // 7. 在 version-config/ 中执行 Git 操作
+        self.git_add("openclaw.json").await?;
+
+        // 8. 检查是否有变更需要提交
+        if !self.has_changes().await? {
+            tracing::info!("No changes to commit in version-config/");
+            return Ok(None);
+        }
+
+        // 9. 提交
+        let msg = commit_msg.unwrap_or_else(|| "Update config".to_string());
+        let commit_id = self.git_commit(&msg).await?;
+
+        tracing::info!("Config committed to Git with id: {}", commit_id);
+        Ok(Some(commit_id))
+    }
 
     /// 获取 Provider 模块配置
     pub async fn get_providers(&self) -> Result<Vec<serde_json::Value>> {

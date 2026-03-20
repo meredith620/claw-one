@@ -180,6 +180,20 @@ async fn run_server() {
     // 初始化配置管理器
     let config_manager = std::sync::Arc::new(ConfigManager::new());
     
+    // 自动迁移旧版 Git 仓库（如果存在）
+    match config_manager.migrate_legacy_git_repo().await {
+        Ok(true) => {
+            info!("✅ Migrated legacy Git repo to version-config/");
+        }
+        Ok(false) => {
+            // 无需迁移
+        }
+        Err(e) => {
+            tracing::warn!("⚠️ Git migration warning: {}", e);
+            // 继续启动，不阻塞
+        }
+    }
+    
     // 初始化状态管理器
     let state_manager = std::sync::Arc::new(StateManager::new(config_manager.clone(), &settings.openclaw));
 

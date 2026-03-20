@@ -22,39 +22,26 @@ pub async fn save_agents(
     Extension(config_manager): Extension<Arc<ConfigManager>>,
     Json(data): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
+    // 1. 保存 agents 配置（这会更新内存中的配置并保存到主文件）
     config_manager.save_agents(&data).await?;
     
-    // 创建 Git 提交
-    if let Err(e) = config_manager.ensure_git_repo().await {
-        tracing::error!("Git ensure_git_repo failed: {}", e);
-        return Err(e);
-    }
+    // 2. 读取当前完整配置
+    let config = config_manager.get_config().await?;
     
-    if let Err(e) = config_manager.git_add(".").await {
-        tracing::error!("Git git_add failed: {}", e);
-        return Err(e);
-    }
-    
-    match config_manager.has_changes().await {
-        Ok(true) => {
-            match config_manager.git_commit("Update agent config").await {
-                Ok(commit_id) => {
-                    return Ok(Json(serde_json::json!({
-                        "success": true,
-                        "commit": commit_id,
-                    })));
-                }
-                Err(e) => {
-                    tracing::error!("Git git_commit failed: {}", e);
-                    return Err(e);
-                }
-            }
+    // 3. 同步到 version-config/ 并执行 Git 提交
+    match config_manager.sync_to_version_config(&config, Some("Update agent config".to_string())).await {
+        Ok(Some(commit_id)) => {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "commit": commit_id,
+            })));
         }
-        Ok(false) => {
+        Ok(None) => {
+            // 没有变更需要提交
             return Ok(Json(serde_json::json!({"success": true})));
         }
         Err(e) => {
-            tracing::error!("Git has_changes failed: {}", e);
+            tracing::error!("Git sync_to_version_config failed: {}", e);
             return Err(e);
         }
     }

@@ -171,43 +171,25 @@ pub async fn save_module_handler(
         }
     }
     
-    // 保存配置
-    config_manager.save_config(&full_config).await?;
-    
-    // 创建 Git 提交（如果没有变更则不提交）
-    if let Err(e) = config_manager.ensure_git_repo().await {
-        tracing::error!("save_module_handler [{}]: ensure_git_repo failed: {}", module, e);
-        return Err(e);
-    }
-    
-    if let Err(e) = config_manager.git_add(".").await {
-        tracing::error!("save_module_handler [{}]: git_add failed: {}", module, e);
-        return Err(e);
-    }
-    
-    match config_manager.has_changes().await {
-        Ok(true) => {
-            match config_manager.git_commit(&format!("Update {} module", module)).await {
-                Ok(commit_id) => {
-                    return Ok(Json(serde_json::json!({
-                        "success": true,
-                        "commit": commit_id,
-                    })));
-                }
-                Err(e) => {
-                    tracing::error!("save_module_handler [{}]: git_commit failed: {}", module, e);
-                    return Err(e);
-                }
-            }
+    // 使用 sync_to_version_config 完成：保存 + 复制 + diff + Git 提交
+    match config_manager.sync_to_version_config(
+        &full_config, 
+        Some(format!("Update {} module", module))
+    ).await {
+        Ok(Some(commit_id)) => {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "commit": commit_id,
+            })));
         }
-        Ok(false) => {
+        Ok(None) => {
             return Ok(Json(serde_json::json!({
                 "success": true,
                 "message": format!("{} module saved successfully", module),
             })));
         }
         Err(e) => {
-            tracing::error!("save_module_handler [{}]: has_changes failed: {}", module, e);
+            tracing::error!("save_module_handler [{}]: sync_to_version_config failed: {}", module, e);
             return Err(e);
         }
     }

@@ -84,17 +84,14 @@ pub async fn save_provider(
         return Err(e);
     }
     
-    // 创建 Git 提交
-    tracing::info!("Creating git commit...");
-    if let Err(e) = config_manager.ensure_git_repo().await {
-        tracing::error!("ensure_git_repo failed: {}", e);
-        return Err(e);
-    }
-    
-    if let Err(e) = config_manager.git_add(".").await {
-        tracing::error!("git_add failed: {}", e);
-        return Err(e);
-    }
+    // 读取当前完整配置并同步到 version-config/
+    let config = match config_manager.get_config().await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("get_config failed: {}", e);
+            return Err(e);
+        }
+    };
     
     let commit_msg = if is_update {
         format!("Update provider: {}", provider_id)
@@ -102,28 +99,27 @@ pub async fn save_provider(
         format!("Add provider: {}", provider_id)
     };
     
-    if config_manager.has_changes().await? {
-        let commit_id = match config_manager.git_commit(&commit_msg).await {
-            Ok(id) => id,
-            Err(e) => {
-                tracing::error!("git_commit failed: {}", e);
-                return Err(e);
-            }
-        };
-        
-        tracing::info!("Provider saved successfully with commit: {}", commit_id);
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "provider_id": provider_id,
-            "commit": commit_id,
-        })));
+    match config_manager.sync_to_version_config(&config, Some(commit_msg)).await {
+        Ok(Some(commit_id)) => {
+            tracing::info!("Provider saved successfully with commit: {}", commit_id);
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "provider_id": provider_id,
+                "commit": commit_id,
+            })));
+        }
+        Ok(None) => {
+            tracing::info!("Provider saved successfully (no changes)");
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "provider_id": provider_id,
+            })));
+        }
+        Err(e) => {
+            tracing::error!("sync_to_version_config failed: {}", e);
+            return Err(e);
+        }
     }
-    
-    tracing::info!("Provider saved successfully (no changes)");
-    Ok(Json(serde_json::json!({
-        "success": true,
-        "provider_id": provider_id,
-    })))
 }
 
 /// 删除 Provider 实例
@@ -133,20 +129,25 @@ pub async fn delete_provider(
 ) -> Result<Json<serde_json::Value>> {
     config_manager.delete_provider(&provider_id).await?;
     
-    // 创建 Git 提交
-    config_manager.ensure_git_repo().await?;
-    config_manager.git_add(".").await?;
-    if config_manager.has_changes().await? {
-        let commit_id = config_manager
-            .git_commit(&format!("Delete provider: {}", provider_id))
-            .await?;
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "commit": commit_id,
-        })));
-    }
+    // 读取当前完整配置并同步到 version-config/
+    let config = config_manager.get_config().await?;
+    let commit_msg = format!("Delete provider: {}", provider_id);
     
-    Ok(Json(serde_json::json!({"success": true})))
+    match config_manager.sync_to_version_config(&config, Some(commit_msg)).await {
+        Ok(Some(commit_id)) => {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "commit": commit_id,
+            })));
+        }
+        Ok(None) => {
+            return Ok(Json(serde_json::json!({"success": true})));
+        }
+        Err(e) => {
+            tracing::error!("sync_to_version_config failed: {}", e);
+            return Err(e);
+        }
+    }
 }
 
 /// 获取模型优先级
@@ -184,16 +185,22 @@ pub async fn save_model_priority(
         .save_model_priority(primary, &fallbacks)
         .await?;
     
-    // 创建 Git 提交
-    config_manager.ensure_git_repo().await?;
-    config_manager.git_add(".").await?;
-    if config_manager.has_changes().await? {
-        let commit_id = config_manager.git_commit("Update model priority").await?;
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "commit": commit_id,
-        })));
-    }
+    // 读取当前完整配置并同步到 version-config/
+    let config = config_manager.get_config().await?;
     
-    Ok(Json(serde_json::json!({"success": true})))
+    match config_manager.sync_to_version_config(&config, Some("Update model priority".to_string())).await {
+        Ok(Some(commit_id)) => {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "commit": commit_id,
+            })));
+        }
+        Ok(None) => {
+            return Ok(Json(serde_json::json!({"success": true})));
+        }
+        Err(e) => {
+            tracing::error!("sync_to_version_config failed: {}", e);
+            return Err(e);
+        }
+    }
 }
