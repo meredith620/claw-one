@@ -175,18 +175,40 @@ pub async fn save_module_handler(
     config_manager.save_config(&full_config).await?;
     
     // 创建 Git 提交（如果没有变更则不提交）
-    config_manager.ensure_git_repo().await?;
-    config_manager.git_add(".").await?;
-    if config_manager.has_changes().await? {
-        let commit_id = config_manager.git_commit(&format!("Update {} module", module)).await?;
-        return Ok(Json(serde_json::json!({
-            "success": true,
-            "commit": commit_id,
-        })));
+    if let Err(e) = config_manager.ensure_git_repo().await {
+        tracing::error!("save_module_handler [{}]: ensure_git_repo failed: {}", module, e);
+        return Err(e);
     }
     
-    Ok(Json(serde_json::json!({
-        "success": true,
-        "message": format!("{} module saved successfully", module),
-    })))
+    if let Err(e) = config_manager.git_add(".").await {
+        tracing::error!("save_module_handler [{}]: git_add failed: {}", module, e);
+        return Err(e);
+    }
+    
+    match config_manager.has_changes().await {
+        Ok(true) => {
+            match config_manager.git_commit(&format!("Update {} module", module)).await {
+                Ok(commit_id) => {
+                    return Ok(Json(serde_json::json!({
+                        "success": true,
+                        "commit": commit_id,
+                    })));
+                }
+                Err(e) => {
+                    tracing::error!("save_module_handler [{}]: git_commit failed: {}", module, e);
+                    return Err(e);
+                }
+            }
+        }
+        Ok(false) => {
+            return Ok(Json(serde_json::json!({
+                "success": true,
+                "message": format!("{} module saved successfully", module),
+            })));
+        }
+        Err(e) => {
+            tracing::error!("save_module_handler [{}]: has_changes failed: {}", module, e);
+            return Err(e);
+        }
+    }
 }
