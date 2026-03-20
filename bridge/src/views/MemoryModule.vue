@@ -151,8 +151,13 @@ const loadData = async () => {
   loading.value = true
   try {
     const res = await getMemory()
-    const data = res.data || {}
-    Object.assign(memoryConfig, { ...defaultConfig, ...data })
+    const data = res.data
+    // 如果后端返回 null，表示配置不存在，默认禁用
+    if (data === null || data === undefined) {
+      Object.assign(memoryConfig, { enabled: false })
+    } else {
+      Object.assign(memoryConfig, { ...defaultConfig, ...data })
+    }
     // 确保嵌套对象存在
     if (!memoryConfig.remote) memoryConfig.remote = { baseUrl: 'http://localhost:11434' }
     if (!memoryConfig.store) memoryConfig.store = { vector: { enabled: false } }
