@@ -300,23 +300,54 @@ async fn stop_service() {
         .args(["--user", "stop", "claw-one"])
         .output();
 
-    if systemd_result.is_ok() && systemd_result.unwrap().status.success() {
-        println!("✅ Claw One 已停止（systemd）");
-        return;
+    let systemd_ok = systemd_result.is_ok() && systemd_result.unwrap().status.success();
+    
+    if systemd_ok {
+        // 等待几秒让 systemd 完成停止
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     }
 
-    // 否则查找并终止进程（使用精确匹配）
-    let output = Command::new("pkill")
-        .args(["-f", "claw-one (run|start)$"])
+    // 验证进程是否真的停止了
+    for i in 0..5 {
+        let check = Command::new("pgrep")
+            .args(["-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
+            .output();
+        
+        if !check.is_ok() || !check.unwrap().status.success() {
+            // 进程已停止
+            if systemd_ok {
+                println!("✅ Claw One 已停止（systemd）");
+            } else {
+                println!("✅ Claw One 已停止");
+            }
+            return;
+        }
+        
+        // 进程还在运行，尝试强制终止
+        if i == 0 {
+            // 第一次尝试使用 pkill
+            let _ = Command::new("pkill")
+                .args(["-TERM", "-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
+                .output();
+        } else if i == 2 {
+            // 第三次尝试使用 SIGKILL
+            let _ = Command::new("pkill")
+                .args(["-KILL", "-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
+                .output();
+        }
+        
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
+    
+    // 最终检查
+    let final_check = Command::new("pgrep")
+        .args(["-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
         .output();
-
-    match output {
-        Ok(o) if o.status.success() => {
-            println!("✅ Claw One 已停止");
-        }
-        _ => {
-            println!("⚠️  Claw One 未在运行");
-        }
+    
+    if final_check.is_ok() && final_check.unwrap().status.success() {
+        println!("⚠️  警告：Claw One 进程可能仍在运行，请手动检查");
+    } else {
+        println!("✅ Claw One 已停止");
     }
 }
 
