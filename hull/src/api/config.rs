@@ -137,6 +137,31 @@ pub async fn get_module_handler(
     Ok(Json(module_config))
 }
 
+/// 递归合并两个JSON对象
+fn deep_merge(existing: &serde_json::Value, new: &serde_json::Value) -> serde_json::Value {
+    if let (Some(existing_obj), Some(new_obj)) = (existing.as_object(), new.as_object()) {
+        let mut merged = existing_obj.clone();
+        for (key, value) in new_obj.iter() {
+            if let Some(existing_val) = merged.get(key) {
+                // 如果两边都是对象，递归合并
+                if existing_val.is_object() && value.is_object() {
+                    merged.insert(key.clone(), deep_merge(existing_val, value));
+                } else {
+                    // 否则直接替换
+                    merged.insert(key.clone(), value.clone());
+                }
+            } else {
+                // 新key，直接插入
+                merged.insert(key.clone(), value.clone());
+            }
+        }
+        serde_json::Value::Object(merged)
+    } else {
+        // 如果不是对象，直接返回新值
+        new.clone()
+    }
+}
+
 /// 保存指定模块的配置
 pub async fn save_module_handler(
     Path(module): Path<String>,
@@ -155,13 +180,10 @@ pub async fn save_module_handler(
         })));
     }
     
-    // Deep merge: 将传入的字段合并到现有配置，而非整体替换
+    // Deep merge: 递归合并传入的字段到现有配置
     if let Some(existing) = full_config.get(&module).cloned() {
         if existing.is_object() && module_config.is_object() {
-            let mut merged = existing;
-            for (key, value) in module_config.as_object().unwrap() {
-                merged[key] = value.clone();
-            }
+            let merged = deep_merge(&existing, &module_config);
             full_config[&module] = merged;
         } else {
             full_config[&module] = module_config;
