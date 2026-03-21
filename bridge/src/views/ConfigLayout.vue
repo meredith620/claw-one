@@ -161,5 +161,6 @@ const restartOpenClaw = async () => {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+  padding-bottom: 60px;
 }
 </style>

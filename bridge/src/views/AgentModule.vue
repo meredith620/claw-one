@@ -452,7 +452,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.agent-module { max-width: 900px; }
+.agent-module { max-width: 900px; padding-bottom: 40px; }
 .agent-section { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .section-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
