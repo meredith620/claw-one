@@ -309,6 +309,8 @@ async fn start_daemon_mode(exe_path: &std::path::Path) {
 
 /// 停止服务
 async fn stop_service() {
+    println!("🛑 正在停止 Claw One...");
+    
     // 先尝试停止 systemd 服务
     let systemd_result = Command::new("systemctl")
         .args(["--user", "stop", "claw-one"])
@@ -317,58 +319,94 @@ async fn stop_service() {
     let systemd_ok = systemd_result.is_ok() && systemd_result.unwrap().status.success();
     
     if systemd_ok {
-        // 等待几秒让 systemd 完成停止
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        // 给 systemd 一些时间停止
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 
-    // 验证进程是否真的停止了
-    for i in 0..5 {
-        let check = Command::new("pgrep")
-            .args(["-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
-            .output();
+    // 使用 pgrep 找到并终止进程
+    // 首先尝试优雅终止 (SIGTERM)
+    let pids = get_claw_one_pids().await;
+    if !pids.is_empty() {
+        for pid in &pids {
+            let _ = Command::new("kill")
+                .args(["-TERM", pid])
+                .output();
+        }
         
-        if !check.is_ok() || !check.unwrap().status.success() {
-            // 进程已停止
-            if systemd_ok {
-                println!("✅ Claw One 已停止（systemd）");
-            } else {
+        // 等待进程退出
+        for i in 0..10 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            let remaining = get_claw_one_pids().await;
+            if remaining.is_empty() {
                 println!("✅ Claw One 已停止");
+                return;
             }
-            return;
+            
+            // 超过 5 次尝试后强制终止
+            if i >= 5 {
+                for pid in &remaining {
+                    let _ = Command::new("kill")
+                        .args(["-KILL", pid])
+                        .output();
+                }
+            }
         }
-        
-        // 进程还在运行，尝试强制终止
-        if i == 0 {
-            // 第一次尝试使用 pkill
-            let _ = Command::new("pkill")
-                .args(["-TERM", "-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
-                .output();
-        } else if i == 2 {
-            // 第三次尝试使用 SIGKILL
-            let _ = Command::new("pkill")
-                .args(["-KILL", "-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
-                .output();
-        }
-        
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
     
     // 最终检查
-    let final_check = Command::new("pgrep")
-        .args(["-f", "^/home/[^/]+/claw-one/bin/claw-one (run|start)$"])
+    let final_pids = get_claw_one_pids().await;
+    if final_pids.is_empty() {
+        println!("✅ Claw One 已停止");
+    } else {
+        println!("⚠️  警告：Claw One 进程可能仍在运行 (PIDs: {:?})", final_pids);
+    }
+}
+
+/// 获取 claw-one 进程 PID 列表
+async fn get_claw_one_pids() -> Vec<String> {
+    let output = Command::new("pgrep")
+        .args(["-a", "-f", "claw-one"])
         .output();
     
-    if final_check.is_ok() && final_check.unwrap().status.success() {
-        println!("⚠️  警告：Claw One 进程可能仍在运行，请手动检查");
-    } else {
-        println!("✅ Claw One 已停止");
+    match output {
+        Ok(o) if o.status.success() => {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .filter_map(|line| {
+                    // 排除 grep 命令自身和其他不相关进程
+                    if line.contains("grep") || line.contains("restart") || line.contains("stop") {
+                        return None;
+                    }
+                    // 只保留运行中的 claw-one run/start 进程
+                    if line.contains(" run") || line.contains(" start") {
+                        line.split_whitespace().next().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+        _ => Vec::new()
     }
 }
 
 /// 重启服务
 async fn restart_service() {
+    println!("🔄 重启 Claw One...");
+    
+    // 确保完全停止
     stop_service().await;
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    
+    // 等待确保进程完全退出
+    for _ in 0..5 {
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        let pids = get_claw_one_pids().await;
+        if pids.is_empty() {
+            break;
+        }
+    }
+    
+    // 启动服务
     start_service(false).await;
 }
 
@@ -536,13 +574,28 @@ fn show_config() {
 
 /// 检查服务是否运行
 async fn is_running() -> bool {
-    // 使用更精确的匹配：只匹配 'claw-one run' 或 'claw-one start' 进程
-    // 排除 openclaw-gateway 等其他包含 claw-one 的进程
-    Command::new("pgrep")
-        .args(["-f", "claw-one (run|start)$"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    // 检查 claw-one run 或 claw-one start 进程
+    // 使用列表模式检查，更可靠
+    let check_run = Command::new("pgrep")
+        .args(["-a", "-f", "claw-one run"])
+        .output();
+    
+    let check_start = Command::new("pgrep")
+        .args(["-a", "-f", "claw-one start"])
+        .output();
+    
+    // 排除 grep 本身和其他匹配，只检查实际进程
+    let has_run = matches!(&check_run, Ok(o) if o.status.success() && 
+        String::from_utf8_lossy(&o.stdout).lines().any(|l| 
+            l.contains("claw-one") && l.contains(" run") && !l.contains("grep")
+        ));
+    
+    let has_start = matches!(&check_start, Ok(o) if o.status.success() && 
+        String::from_utf8_lossy(&o.stdout).lines().any(|l| 
+            l.contains("claw-one") && l.contains(" start") && !l.contains("grep")
+        ));
+    
+    has_run || has_start
 }
 
 /// 使用 systemd 启动服务
