@@ -194,7 +194,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { getAgents, saveAgents as saveAgentsApi, getModuleConfig, saveModuleConfig } from '../api'
@@ -436,7 +436,19 @@ const saveAgents = async () => {
   }
 }
 
-onMounted(loadData)
+// 监听全局保存事件
+const handleSaveAll = () => {
+  saveAgents()
+}
+
+onMounted(() => {
+  loadData()
+  window.addEventListener('claw:save-all', handleSaveAll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('claw:save-all', handleSaveAll)
+})
 </script>
 
 <style scoped>
