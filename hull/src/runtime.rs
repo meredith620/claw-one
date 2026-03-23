@@ -114,26 +114,18 @@ impl RuntimeManager {
     
     /// 获取 openclaw gateway 进程的 PID
     async fn get_process_pid(&self) -> Option<u32> {
-        let uid = match std::env::var("UID") {
-            Ok(uid_str) => uid_str,
-            Err(_) => match Command::new("id").args(["-u"]).output() {
-                Ok(output) if output.status.success() => {
-                    String::from_utf8_lossy(&output.stdout).trim().to_string()
-                }
-                _ => return None,
-            },
-        };
-
-        let output = Command::new("pgrep")
-            .args(["-u", &uid, "-f", "openclaw gateway"])
+        // 使用 pidof 获取 openclaw-gateway 的 PID，避免 pgrep -f 匹配命令行自身
+        let output = Command::new("pidof")
+            .arg("openclaw-gateway")
             .output()
             .ok()?;
         
         if output.status.success() {
             String::from_utf8_lossy(&output.stdout)
                 .trim()
-                .parse::<u32>()
-                .ok()
+                .split_whitespace()
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
         } else {
             None
         }
@@ -194,21 +186,11 @@ impl RuntimeManager {
         Ok(false)
     }
 
-    /// 检查进程是否运行（快速检查，只检查当前用户的进程）
+    /// 检查进程是否运行（快速检查）
     pub async fn is_process_running(&self) -> bool {
-        // 获取当前用户 UID
-        let uid = match std::env::var("UID") {
-            Ok(uid_str) => uid_str,
-            Err(_) => match Command::new("id").args(["-u"]).output() {
-                Ok(output) if output.status.success() => {
-                    String::from_utf8_lossy(&output.stdout).trim().to_string()
-                }
-                _ => return false,
-            },
-        };
-
-        let output = Command::new("pgrep")
-            .args(["-u", &uid, "-f", "openclaw gateway"])
+        // 使用 pidof 检查 openclaw-gateway 是否存在
+        let output = Command::new("pidof")
+            .arg("openclaw-gateway")
             .output();
 
         match output {
