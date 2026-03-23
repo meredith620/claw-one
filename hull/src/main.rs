@@ -364,30 +364,36 @@ async fn stop_service() {
 
 /// 获取 claw-one 进程 PID 列表
 async fn get_claw_one_pids() -> Vec<String> {
-    let output = Command::new("pgrep")
-        .args(["-a", "-f", "claw-one"])
+    let current_pid = std::process::id();
+    let mut pids = Vec::new();
+    
+    // 使用 pidof 获取所有 claw-one 进程
+    let output = Command::new("pidof")
+        .arg("claw-one")
         .output();
     
-    match output {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter_map(|line| {
-                    // 排除 grep 命令自身和其他不相关进程
-                    if line.contains("grep") || line.contains("restart") || line.contains("stop") {
-                        return None;
+    if let Ok(o) = output {
+        if o.status.success() {
+            let output_str = String::from_utf8_lossy(&o.stdout);
+            for pid_str in output_str.split_whitespace() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    // 排除当前进程
+                    if pid == current_pid {
+                        continue;
                     }
-                    // 只保留运行中的 claw-one run/start 进程
-                    if line.contains(" run") || line.contains(" start") {
-                        line.split_whitespace().next().map(|s| s.to_string())
-                    } else {
-                        None
+                    // 只保留运行中的 claw-one run 进程
+                    let cmdline_path = format!("/proc/{}/cmdline", pid);
+                    if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
+                        if cmdline.contains("run") {
+                            pids.push(pid_str.to_string());
+                        }
                     }
-                })
-                .collect()
+                }
+            }
         }
-        _ => Vec::new()
     }
+    
+    pids
 }
 
 /// 重启服务
@@ -574,28 +580,36 @@ fn show_config() {
 
 /// 检查服务是否运行
 async fn is_running() -> bool {
-    // 检查 claw-one run 或 claw-one start 进程
-    // 使用列表模式检查，更可靠
-    let check_run = Command::new("pgrep")
-        .args(["-a", "-f", "claw-one run"])
+    // 获取当前进程 PID，排除自身
+    let current_pid = std::process::id();
+    
+    // 使用 pidof 获取所有 claw-one 进程，然后检查 cmdline
+    let output = Command::new("pidof")
+        .arg("claw-one")
         .output();
     
-    let check_start = Command::new("pgrep")
-        .args(["-a", "-f", "claw-one start"])
-        .output();
-    
-    // 排除 grep 本身和其他匹配，只检查实际进程
-    let has_run = matches!(&check_run, Ok(o) if o.status.success() && 
-        String::from_utf8_lossy(&o.stdout).lines().any(|l| 
-            l.contains("claw-one") && l.contains(" run") && !l.contains("grep")
-        ));
-    
-    let has_start = matches!(&check_start, Ok(o) if o.status.success() && 
-        String::from_utf8_lossy(&o.stdout).lines().any(|l| 
-            l.contains("claw-one") && l.contains(" start") && !l.contains("grep")
-        ));
-    
-    has_run || has_start
+    match output {
+        Ok(o) if o.status.success() => {
+            let pids = String::from_utf8_lossy(&o.stdout);
+            for pid_str in pids.split_whitespace() {
+                if let Ok(pid) = pid_str.parse::<u32>() {
+                    // 排除当前进程
+                    if pid == current_pid {
+                        continue;
+                    }
+                    // 检查 cmdline 是否包含 "run"（服务进程）
+                    let cmdline_path = format!("/proc/{}/cmdline", pid);
+                    if let Ok(cmdline) = std::fs::read_to_string(&cmdline_path) {
+                        if cmdline.contains("run") {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        _ => false,
+    }
 }
 
 /// 使用 systemd 启动服务
