@@ -1,83 +1,73 @@
 # Claw One 可视化配置设计文档
 
 **版本**: v2.7  
-**日期**: 2026-03-20  
-**状态**: ✅ 设计确认完成，进入实现阶段
+**日期**: 2026-03-27  
+**状态**: 设计完成，后端 API 已实现，前端待开发
 
 ---
 
-## 1. 设计目标与核心要求
+## 1. 设计目标
 
-将 Claw One 的前端配置界面从 JSON 编辑器改造为**模块化的可视化表单**，实现对 OpenClaw `openclaw.json` 配置文件的直观管理。
+将前端配置界面从 JSON 编辑器改造为**模块化的可视化表单**。
 
 ### 核心要求
 
-| 编号 | 要求 | 说明 |
+| 编号 | 要求 | 状态 |
 |------|------|------|
-| R1 | 直接读写 openclaw.json | 不引入额外存储，所有配置变更直接反映到 OpenClaw 配置 |
-| R2 | 字段级定向修改 | 表单只修改对应配置路径，保留其他现有字段不变 |
-| R3 | 纯可视化界面 | 禁止用户在页面内手工编辑 JSON |
-| R4 | 渐进式 Provider 支持 | 先实现 Moonshot 验证可行性，再扩展到 OpenAI/Anthropic，最后 Custom Provider |
-| R5 | 手动重启机制 | 配置保存后提示需要重启，用户手动触发重启 |
-| R6 | 模块化设计 | 按功能模块划分：Provider、Agent、Memory、Channel |
-| R7 | 轻量动态表单 | 表单渲染基于 Schema 动态生成，避免硬编码绑定前后端 |
+| R1 | 直接读写 openclaw.json | ✅ 后端已实现 |
+| R2 | 字段级定向修改 | ✅ 后端已实现 |
+| R3 | 纯可视化界面 | ⏳ 前端待开发 |
+| R4 | 渐进式 Provider 支持 | ✅ 后端已支持 |
+| R5 | 手动重启机制 | ✅ 后端已实现 |
+| R6 | 模块化设计 | ✅ 后端已支持 |
+| R7 | 轻量动态表单 | ⏳ 前端待开发 |
 
 ---
 
-## 2. 已确认设计决策
+## 2. 设计决策
 
-| 问题 | 决策 |
-|------|------|
-| **模块范围** | 只保留 Provider、Agent、Memory、Channel **4个核心模块** |
-| **布局方案** | **两栏布局**（左侧导航 + 右侧内容） |
-| **导入/导出** | ❌ **不需要** |
-| **Agent 工作区创建** | 自动提供建议值，用户不修改就用建议值 |
-| **模型列表** | 固定列表 + 支持自定义输入 |
-| **Memory Provider** | 先 Ollama，后期可扩展 |
-| **飞书** | ❌ 单实例设计，不支持多账号 |
-| **API Key 验证** | 保存时验证，失败页面提示，Provider ID 冲突检测 |
-| **版本管理** | Gateway 启动成功后自动保存，标记点回滚 |
-| **Safe Mode** | 重启失败且配置原因时进入，支持回滚 |
-| **默认模型设置** | Provider 设置时可设为默认模型 |
-| **内置 Provider** | Moonshot、OpenAI、Anthropic、MiniMax、Custom |
-| **Provider 多实例** | ✅ 支持，每个类型可创建多个不同 API Key 的实例 |
-| **实例 ID 规则** | `{type}-{name}`，如 `moonshot-work` |
-| **表单渲染** | 轻量动态生成，基于 Schema 而非硬编码 |
+| 问题 | 决策 | 状态 |
+|------|------|------|
+| **模块范围** | Provider、Agent、Memory、Channel | ✅ |
+| **布局方案** | 两栏布局 | ⏳ |
+| **导入/导出** | 不需要 | ✅ |
+| **Provider 多实例** | 支持 | ✅ |
+| **Safe Mode** | 重启失败时进入 | ✅ 后端已实现 |
 
 ---
 
-## 3. 内置 Provider 列表
+## 3. 内置 Provider
 
-| 内置 Provider | 阶段 | 说明 |
-|--------------|------|------|
-| **Moonshot** | Phase 1 | 含3个子选项：Kimi Coding(默认)/.ai/.cn |
-| **OpenAI** | Phase 1 | API Key 认证 |
-| **Anthropic** | Phase 1 | API Key 认证 |
-| **MiniMax** | Phase 2 | OAuth/M2.5/M2.5(CN)/M2.5 Highspeed |
-| **Custom** | Phase 2 | 用户自定义，支持多种 API 格式 |
+| Provider | 状态 | 说明 |
+|----------|------|------|
+| **Moonshot** | ✅ | Kimi Coding/.ai/.cn |
+| **OpenAI** | ✅ | API Key 认证 |
+| **Anthropic** | ✅ | API Key 认证 |
+| **MiniMax** | ⏳ | Phase 2 |
+| **Custom** | ✅ | 用户自定义 |
 
 ---
 
-## 4. Provider Schema 定义
+## 4. API 实现状态
 
-> 内置 Provider 使用固定 `api` 字段，**只有 Custom Provider 需要用户选择 API 格式**。
+后端 API 已全部实现：
 
-### 4.1 Moonshot
+| API | 状态 | 说明 |
+|-----|------|------|
+| `GET/POST /api/providers` | ✅ | Provider CRUD |
+| `GET/POST /api/agents` | ✅ | Agent 配置 |
+| `GET/POST /api/memory` | ✅ | Memory 配置 |
+| `GET/POST /api/channels` | ✅ | Channel 配置 |
+| `GET/POST /api/model-priority` | ✅ | 模型优先级 |
+| `GET /api/snapshots` | ✅ | Git 快照列表 |
+| `POST /api/rollback` | ✅ | 回滚 |
+| `GET /api/state` | ✅ | 服务状态 |
 
-```yaml
-name: Moonshot
-type: provider
-api: openai-completions  # 固定，不需要用户选择
-fields:
-  - id: enabled
-    type: boolean
-    label: 启用 Provider
-    default: true
-  - id: apiKey
-    type: password
-    label: API Key
-    required: true
-  - id: baseUrl
+详见 [FINAL_DESIGN.md](./FINAL_DESIGN.md) API 章节。
+
+---
+
+## 5. 前端设计（简化版）
     type: string
     label: Base URL
     default: https://api.moonshot.ai/v1
@@ -1168,7 +1158,14 @@ Response: {
 
 ---
 
-## 12. 历史文档
+## 相关文档
 
-- `VISUAL_CONFIG_DESIGN_v2.md` - 本合并版本的前身文档
-- `CONFIG_MODULAR_RESEARCH.md` - 方案调研分析
+| 文档 | 内容 |
+|------|------|
+| [FINAL_DESIGN.md](./FINAL_DESIGN.md) | 架构、API 设计 |
+| [CONFIG_MODULAR_RESEARCH.md](./CONFIG_MODULAR_RESEARCH.md) | 配置模块化调研 |
+| [TEST_FRAMEWORK.md](../TEST_FRAMEWORK.md) | 测试框架 |
+
+---
+
+*文档已更新至当前实现状态*

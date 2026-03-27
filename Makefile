@@ -88,6 +88,57 @@ test:
 	cd bridge && npm run test || echo "前端测试跳过"
 
 # ============================================================
+# 测试框架 (Agent-Driven Testing)
+# ============================================================
+
+# 快速测试: Layer 1 + Layer 2 (单元测试 + 集成测试)
+# 约 30 秒，适合开发迭代
+test-fast:
+	@echo "🚀 运行快速测试 (Layer 1 + Layer 2)..."
+	@echo ""
+	@echo "📦 Layer 1: 单元测试 (ConfigManager + StateManager + Git + Validation)..."
+	cd hull && cargo test --lib 2>&1 | tail -30
+	@echo ""
+	@echo "🔗 Layer 2: 集成测试 (API + 完整性 + 错误场景 + 模块联动)..."
+	cd hull && cargo test --test api_health --test api_config --test api_providers \
+		--test api_agents --test api_memory --test api_channels \
+		--test api_error_cases --test api_module_interaction \
+		--test state_manager_test 2>&1 | tail -40
+	@echo ""
+	@echo "✅ 快速测试完成!"
+
+# E2E 测试: Layer 3 (Docker 全链路测试)
+# 约 2-3 分钟，提交前运行
+test-e2e:
+	@echo "🐳 运行 E2E 测试 (Layer 3)..."
+	@echo ""
+	@cd e2e && ./scripts/test-env-up.sh
+	@echo ""
+	@cd e2e && ./scripts/run-e2e-tests.sh
+	@echo ""
+	@echo "✅ E2E 测试完成!"
+
+# 停止 E2E 测试环境
+test-env-down:
+	@echo "🛑 停止 E2E 测试环境..."
+	@cd e2e && ./scripts/test-env-down.sh
+
+# 重置 E2E 测试环境
+test-env-reset:
+	@echo "🔄 重置 E2E 测试环境..."
+	@cd e2e && ./scripts/test-env-reset.sh
+
+# 全量测试: Layer 1 + 2 + 3
+test-all: test-fast
+	@echo ""
+	@make test-e2e
+
+# 查看 E2E 环境状态
+test-env-status:
+	@echo "📊 E2E 测试环境状态:"
+	@docker ps --filter "name=claw-one-test" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# ============================================================
 # Docker 两阶段构建
 # ============================================================
 

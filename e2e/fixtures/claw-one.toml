@@ -1,0 +1,18 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+log_level = "info"
+
+[openclaw]
+openclaw_home = "/tmp/test-openclaw"
+service_name = "openclaw-gateway"
+health_port = 18789
+health_timeout = 30
+
+[paths]
+data_dir = "/app/data"
+
+[features]
+auto_backup = true
+safe_mode = true
+first_run_wizard = false

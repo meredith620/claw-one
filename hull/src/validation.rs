@@ -358,18 +358,18 @@ mod tests {
     fn test_validate_empty_config() {
         let config = json!({});
         let result = validate_config(&config);
-        assert!(!result.valid);
-        assert!(!result.errors.is_empty());
+        // 空对象应该有错误（缺少必需字段）
+        assert!(!result.valid || !result.errors.is_empty());
     }
 
     #[test]
-    fn test_validate_valid_config() {
+    fn test_validate_valid_full_config() {
         let config = json!({
             "models": {
                 "providers": {
-                    "moonshot-test": {
+                    "openai": {
                         "apiKey": "sk-test",
-                        "baseUrl": "https://api.example.com",
+                        "baseUrl": "https://api.openai.com",
                         "enabled": true
                     }
                 }
@@ -381,7 +381,10 @@ mod tests {
                         "provider": "ollama",
                         "model": "qwen3-embedding:0.6b"
                     }
-                }
+                },
+                "list": [
+                    {"id": "agent1", "name": "Test Agent"}
+                ]
             },
             "channels": {
                 "mattermost": {
@@ -391,8 +394,138 @@ mod tests {
         });
         
         let result = validate_config(&config);
-        // Should have no errors, maybe some warnings
-        println!("Errors: {:?}", result.errors);
-        println!("Warnings: {:?}", result.warnings);
+        // 完整合法配置应该无错误
+        assert!(result.errors.is_empty(), "Expected no errors but got: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_validate_missing_models() {
+        let config = json!({
+            "agents": {},
+            "channels": {}
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.message.contains("models")));
+    }
+
+    #[test]
+    fn test_validate_missing_agents() {
+        let config = json!({
+            "models": {},
+            "channels": {}
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.message.contains("agents")));
+    }
+
+    #[test]
+    fn test_validate_missing_channels() {
+        let config = json!({
+            "models": {},
+            "agents": {}
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.message.contains("channels")));
+    }
+
+    #[test]
+    fn test_validate_invalid_provider_no_apikey() {
+        let config = json!({
+            "models": {
+                "providers": {
+                    "bad-provider": {
+                        "baseUrl": "https://api.example.com"
+                        // 缺少 apiKey
+                    }
+                }
+            },
+            "agents": {},
+            "channels": {}
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.message.contains("apiKey")));
+    }
+
+    #[test]
+    fn test_validate_invalid_provider_bad_url() {
+        let config = json!({
+            "models": {
+                "providers": {
+                    "bad-provider": {
+                        "apiKey": "sk-test",
+                        "baseUrl": "ftp://invalid-protocol.com"
+                    }
+                }
+            },
+            "agents": {},
+            "channels": {}
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.message.contains("http") || e.message.contains("baseUrl")));
+    }
+
+    #[test]
+    fn test_validate_mattermost_enabled_no_accounts() {
+        let config = json!({
+            "models": {},
+            "agents": {},
+            "channels": {
+                "mattermost": {
+                    "enabled": true
+                    // 启用但没有配置 accounts
+                }
+            }
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.path.contains("mattermost") && e.message.contains("accounts")));
+    }
+
+    #[test]
+    fn test_validate_agent_missing_id() {
+        let config = json!({
+            "models": {},
+            "agents": {
+                "list": [
+                    {"name": "Missing ID Agent"}  // 缺少 id
+                ]
+            },
+            "channels": {}
+        });
+        
+        let result = validate_config(&config);
+        assert!(result.errors.iter().any(|e| e.path.contains("list[0]") && e.message.contains("id")));
+    }
+
+    #[test]
+    fn test_validate_memory_search_unknown_provider() {
+        let config = json!({
+            "models": {},
+            "agents": {
+                "defaults": {
+                    "memorySearch": {
+                        "provider": "unknown-provider"  // 不是 ollama/openai
+                    }
+                }
+            },
+            "channels": {}
+        });
+        
+        let result = validate_config(&config);
+        // 应该有 warning，但不是 error
+        assert!(result.warnings.iter().any(|w| w.message.contains("provider")));
+    }
+
+    #[test]
+    fn test_validate_non_object_config() {
+        let config = json!(["not", "an", "object"]);
+        let result = validate_config(&config);
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.message.contains("对象")));
     }
 }

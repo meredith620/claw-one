@@ -1,0 +1,36 @@
+# 使用官方 Rust 镜像构建
+FROM rust:1.85-slim-bookworm as builder
+
+WORKDIR /app
+
+# 复制 hull 目录
+COPY hull/Cargo.toml hull/Cargo.lock ./
+COPY hull/build.rs ./build.rs
+COPY hull/src ./src
+
+# 构建 release 版本
+RUN cargo build --release
+
+# 运行阶段
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 复制编译好的二进制文件
+COPY --from=builder /app/target/release/claw-one /app/bin/claw-one
+
+# 创建必要的目录
+RUN mkdir -p /app/data /app/config /tmp/test-openclaw
+
+# 复制配置模板
+COPY e2e/fixtures/claw-one.toml /app/config/claw-one.toml
+
+EXPOSE 8080
+
+CMD ["/app/bin/claw-one", "run"]

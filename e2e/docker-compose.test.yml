@@ -1,0 +1,44 @@
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:2026.3.13-1
+    container_name: claw-one-test-openclaw
+    command: openclaw-gateway --allow-unconfigured
+    ports:
+      - "28789:18789"  # 非标准端口，避免冲突
+    volumes:
+      - openclaw-config:/home/node/.openclaw:rw
+    networks:
+      - claw-one-test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  claw-one:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile.e2e
+    container_name: claw-one-test-app
+    ports:
+      - "28080:8080"  # 非标准端口
+    environment:
+      - CLAW_OPENCLAW_CONFIG=/tmp/test-openclaw/openclaw.json
+      - CLAW_ONE_CONFIG=/app/config/claw-one.toml
+      - RUST_LOG=info
+    volumes:
+      - openclaw-config:/tmp/test-openclaw:rw
+      - claw-one-data:/app/data:rw
+    networks:
+      - claw-one-test-net
+    depends_on:
+      openclaw:
+        condition: service_healthy
+
+volumes:
+  openclaw-config:
+  claw-one-data:
+
+networks:
+  claw-one-test-net:
+    name: claw-one-test-net

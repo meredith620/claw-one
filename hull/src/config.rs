@@ -42,6 +42,11 @@ impl ConfigManager {
                 PathBuf::from(openclaw_home).join("openclaw.json")
             });
         
+        Self::with_config_path(config_path)
+    }
+
+    /// 使用指定的配置路径创建 ConfigManager（用于测试）
+    pub fn with_config_path(config_path: PathBuf) -> Self {
         let git_dir = config_path.parent()
             .expect("Invalid config path")
             .to_path_buf();
@@ -1192,24 +1197,347 @@ mod tests {
     use super::*;
     use tokio::fs;
 
+    /// 创建临时配置目录和 ConfigManager
+    async fn create_test_manager() -> (tempfile::TempDir, ConfigManager) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("openclaw.json");
+        let manager = ConfigManager::with_config_path(config_path);
+        (temp_dir, manager)
+    }
+
     #[tokio::test]
-    async fn test_ensure_git_repo() {
-        // 创建临时目录
-        let temp_dir = std::env::temp_dir().join("claw-one-test");
-        let _ = fs::remove_dir_all(&temp_dir).await;
-        fs::create_dir_all(&temp_dir).await.unwrap();
+    async fn test_get_config_valid() {
+        let (_temp_dir, manager) = create_test_manager().await;
         
-        // 创建配置管理器
-        let config_path = temp_dir.join("openclaw.json");
-        std::env::set_var("CLAW_ONE_CONFIG", config_path.to_str().unwrap());
+        // 写入合法的 openclaw.json
+        let config = serde_json::json!({
+            "version": "1.0",
+            "models": {},
+            "channels": []
+        });
+        fs::write(&manager.config_path, config.to_string()).await.unwrap();
         
-        let manager = ConfigManager::new();
-        manager.ensure_git_repo().await.unwrap();
+        // 验证 get_config 返回正确
+        let result = manager.get_config().await.unwrap();
+        assert_eq!(result.get("version").unwrap().as_str().unwrap(), "1.0");
+    }
+
+    #[tokio::test]
+    async fn test_get_config_missing_file() {
+        let (_temp_dir, manager) = create_test_manager().await;
         
-        // 验证 .git 目录存在
-        assert!(temp_dir.join(".git").exists());
+        // 确保文件不存在
+        assert!(!manager.config_path.exists());
         
-        // 清理
-        let _ = fs::remove_dir_all(&temp_dir).await;
+        // 验证返回 ConfigNotFound 错误
+        let result = manager.get_config().await;
+        assert!(matches!(result, Err(AppError::ConfigNotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_get_config_invalid_json() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入不合法的 JSON
+        fs::write(&manager.config_path, "{ invalid json").await.unwrap();
+        
+        // 验证返回错误
+        let result = manager.get_config().await;
+        assert!(matches!(result, Err(AppError::Json(_))));
+    }
+
+    #[tokio::test]
+    async fn test_get_config_empty_object() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入空对象
+        fs::write(&manager.config_path, "{}").await.unwrap();
+        
+        // 验证能正常解析
+        let result = manager.get_config().await.unwrap();
+        assert!(result.as_object().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_save_config() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 保存配置
+        let config = serde_json::json!({
+            "version": "2.0",
+            "test": "data"
+        });
+        manager.save_config(&config).await.unwrap();
+        
+        // 重新读取并验证内容一致
+        let result = manager.get_config().await.unwrap();
+        assert_eq!(result.get("version").unwrap().as_str().unwrap(), "2.0");
+        assert_eq!(result.get("test").unwrap().as_str().unwrap(), "data");
+    }
+
+    #[tokio::test]
+    async fn test_save_config_creates_parent_dirs() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        // 创建一个深层嵌套的路径，父目录不存在
+        let config_path = temp_dir.path().join("a/b/c/openclaw.json");
+        let manager = ConfigManager::with_config_path(config_path);
+        
+        // 确保父目录不存在
+        assert!(!manager.config_path.parent().unwrap().exists());
+        
+        // 保存配置
+        let config = serde_json::json!({"test": true});
+        manager.save_config(&config).await.unwrap();
+        
+        // 验证父目录被自动创建且文件存在
+        assert!(manager.config_path.parent().unwrap().exists());
+        assert!(manager.config_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_get_providers_empty() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入没有 providers 的配置
+        let config = serde_json::json!({"models": {}});
+        fs::write(&manager.config_path, config.to_string()).await.unwrap();
+        
+        // 验证返回空数组
+        let providers = manager.get_providers().await.unwrap();
+        assert!(providers.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_providers_with_data() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入包含 providers 的配置
+        let config = serde_json::json!({
+            "models": {
+                "providers": {
+                    "test-provider": {
+                        "api": "openai-responses",
+                        "apiKey": "sk-test",
+                        "baseUrl": "https://api.test.com",
+                        "enabled": true,
+                        "models": [{"id": "model-1", "name": "Test Model"}]
+                    }
+                }
+            }
+        });
+        fs::write(&manager.config_path, config.to_string()).await.unwrap();
+        
+        // 验证返回正确的结构
+        let providers = manager.get_providers().await.unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].get("id").unwrap().as_str().unwrap(), "test-provider");
+    }
+
+    #[tokio::test]
+    async fn test_save_provider_new() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 先创建基础配置
+        let config = serde_json::json!({"models": {"providers": {}}});
+        manager.save_config(&config).await.unwrap();
+        
+        // 保存新的 provider
+        let provider_data = serde_json::json!({
+            "api": "openai-responses",
+            "apiKey": "sk-new",
+            "baseUrl": "https://new.provider.com",
+            "defaultModel": "gpt-4"
+        });
+        manager.save_provider("new-provider", &provider_data).await.unwrap();
+        
+        // 验证配置已保存
+        let config = manager.get_config().await.unwrap();
+        let providers = config["models"]["providers"].as_object().unwrap();
+        assert!(providers.contains_key("new-provider"));
+        assert_eq!(
+            providers["new-provider"]["apiKey"].as_str().unwrap(),
+            "sk-new"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_save_provider_update() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 创建包含现有 provider 的配置
+        let config = serde_json::json!({
+            "models": {
+                "providers": {
+                    "existing": {
+                        "api": "openai-responses",
+                        "apiKey": "sk-old",
+                        "baseUrl": "https://old.com"
+                    }
+                }
+            }
+        });
+        manager.save_config(&config).await.unwrap();
+        
+        // 更新 provider
+        let provider_data = serde_json::json!({
+            "api": "anthropic-messages",
+            "apiKey": "sk-new",
+            "baseUrl": "https://new.com"
+        });
+        manager.save_provider("existing", &provider_data).await.unwrap();
+        
+        // 验证已更新
+        let config = manager.get_config().await.unwrap();
+        assert_eq!(
+            config["models"]["providers"]["existing"]["apiKey"].as_str().unwrap(),
+            "sk-new"
+        );
+        assert_eq!(
+            config["models"]["providers"]["existing"]["api"].as_str().unwrap(),
+            "anthropic-messages"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_provider() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 创建包含 provider 的配置
+        let config = serde_json::json!({
+            "models": {
+                "providers": {
+                    "to-delete": {"apiKey": "sk-test"},
+                    "keep": {"apiKey": "sk-keep"}
+                }
+            }
+        });
+        manager.save_config(&config).await.unwrap();
+        
+        // 删除 provider
+        manager.delete_provider("to-delete").await.unwrap();
+        
+        // 验证已删除
+        let config = manager.get_config().await.unwrap();
+        let providers = config["models"]["providers"].as_object().unwrap();
+        assert!(!providers.contains_key("to-delete"));
+        assert!(providers.contains_key("keep"));
+    }
+
+    #[tokio::test]
+    async fn test_get_agents_default() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入没有 agents 的配置
+        let config = serde_json::json!({});
+        fs::write(&manager.config_path, config.to_string()).await.unwrap();
+        
+        // 验证返回默认值
+        let agents = manager.get_agents().await.unwrap();
+        assert!(agents.get("defaults").is_some());
+        assert!(agents.get("list").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_save_agents() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 先创建基础配置
+        let config = serde_json::json!({"agents": {"defaults": {}, "list": []}});
+        manager.save_config(&config).await.unwrap();
+        
+        // 保存 agents 配置
+        let agents = serde_json::json!({
+            "defaults": {
+                "workspace": "/custom/workspace"
+            },
+            "list": [{"id": "agent-1", "name": "Test Agent"}]
+        });
+        manager.save_agents(&agents).await.unwrap();
+        
+        // 验证已保存
+        let config = manager.get_config().await.unwrap();
+        assert_eq!(
+            config["agents"]["defaults"]["workspace"].as_str().unwrap(),
+            "/custom/workspace"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_memory_none() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入没有 memory 配置的配置
+        let config = serde_json::json!({"agents": {"defaults": {}}});
+        fs::write(&manager.config_path, config.to_string()).await.unwrap();
+        
+        // 验证返回 None
+        let memory = manager.get_memory().await.unwrap();
+        assert!(memory.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_save_memory() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 先创建基础配置
+        let config = serde_json::json!({"agents": {"defaults": {}}});
+        manager.save_config(&config).await.unwrap();
+        
+        // 保存 memory 配置
+        let memory = serde_json::json!({
+            "enabled": true,
+            "provider": "ollama",
+            "model": "test-model"
+        });
+        manager.save_memory(&memory).await.unwrap();
+        
+        // 验证已保存
+        let config = manager.get_config().await.unwrap();
+        assert_eq!(
+            config["agents"]["defaults"]["memorySearch"]["model"].as_str().unwrap(),
+            "test-model"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_channels_default() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 写入没有 channels 的配置
+        let config = serde_json::json!({});
+        fs::write(&manager.config_path, config.to_string()).await.unwrap();
+        
+        // 验证返回默认值
+        let channels = manager.get_channels().await.unwrap();
+        assert!(channels.get("mattermost").is_some());
+        assert_eq!(
+            channels["mattermost"]["enabled"].as_bool().unwrap(),
+            false
+        );
+    }
+
+    #[tokio::test]
+    async fn test_save_channels() {
+        let (_temp_dir, manager) = create_test_manager().await;
+        
+        // 先创建基础配置
+        let config = serde_json::json!({});
+        manager.save_config(&config).await.unwrap();
+        
+        // 保存 channels 配置
+        let channels = serde_json::json!({
+            "mattermost": {
+                "enabled": true,
+                "dmPolicy": "allow"
+            }
+        });
+        manager.save_channels(&channels).await.unwrap();
+        
+        // 验证已保存
+        let config = manager.get_config().await.unwrap();
+        assert_eq!(
+            config["channels"]["mattermost"]["enabled"].as_bool().unwrap(),
+            true
+        );
     }
 }

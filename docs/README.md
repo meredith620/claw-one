@@ -1,84 +1,52 @@
-# Claw One 项目文档
+# Claw One
 
-**版本**: MVP 1.0  
-**最后更新**: 2026-03-20
+OpenClaw 的 Web 管理工具 —— 可视化配置、版本管理、自动回滚。
 
 ---
 
-## 项目概述
+## 核心功能
 
-Claw One 是一个便捷管理 OpenClaw 常用功能的 Web 管理工具，解决 OpenClaw 配置复杂、修改易错、门槛高的问题。
-
-## 核心目标
-
-1. **可视化配置**：Web 界面管理配置，无需手写 JSON
-2. **配置不锁死**：即使配置错误也能自动恢复，确保服务可用
-3. **版本管理**：配置变更自动 Git 快照，支持回滚
-
-## 产品形态
-
-Claw One 是一个独立运行的 Web 服务，提供配置管理、状态监控、版本回滚等功能。
-
-**说明**：
-- 纯软件形态，作为 OpenClaw 的管理工具
-- toC/toB 共用一套代码，通过配置区分
-- 支持 Linux/macOS/Windows
-
-## 文档导航
-
-- [最终设计文档](./FINAL_DESIGN.md) - 完整架构、API、部署设计
-- [实施路线图](./roadmap.md) - MVP 计划、里程碑
-- [待办清单](./TODO.md) - 执行待办
-
-## 关键设计原则
-
-### 1. 配置不中断服务
-```
-用户修改配置
-    ↓
-[Config Guardian] Git 快照管理
-    ↓
-保存 → 重启 OpenClaw → 健康检查
-    ↓（成功）
-git commit 记录版本
-    ↓（失败，配置错误）
-自动回滚 → 进入 Safe Mode（显示已回滚提示）
-    ↓（失败，系统错误）
-进入 Safe Mode（不回滚，用户决定）
-```
-
-### 2. 安全隔离
-- **无软件沙盒**：简化实现
-- 运行权限受系统限制
-
-### 3. 运行时支持
-- **当前**：OpenClaw（Node.js）
-- **预留**：PicoClaw（Go）通过 CRI 接口
-- **切换**：V2 支持多 Runtime
+| 功能 | 说明 |
+|------|------|
+| **可视化配置** | Web 界面管理 openclaw.json，无需手写 JSON |
+| **配置安全** | 错误配置自动回滚，服务不中断 |
+| **版本管理** | Git 快照，支持回滚到任意版本 |
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 前端 | Vue 3 + TypeScript + Vite |
-| 后端 | Rust + Axum + Tokio |
-| 进程管理 | systemd |
-| 快照存储 | Git |
-| 配置格式 | JSON |
+- **前端**: Vue 3 + TypeScript + Vite
+- **后端**: Rust + Axum + Tokio
+- **进程管理**: systemd
+- **版本控制**: Git
 
 ## 快速开始
 
-### 开发环境
 ```bash
+# 开发模式
 git clone <repo>
 cd claw-one
-# 详见 FINAL_DESIGN.md
+make dev
+
+# 运行测试
+make test-fast    # 单元 + 集成测试
+make test-e2e     # E2E 测试
 ```
 
-### 运行要求
-- OpenClaw 已安装并可运行
-- Rust 1.70+ / Node.js 18+ 开发环境
+## 文档
+
+| 文档 | 内容 |
+|------|------|
+| [docs/FINAL_DESIGN.md](docs/FINAL_DESIGN.md) | 架构、API、部署设计 |
+| [docs/roadmap.md](docs/roadmap.md) | 实施路线图 |
+| [docs/VISUAL_CONFIG_DESIGN.md](docs/VISUAL_CONFIG_DESIGN.md) | 前端配置界面设计 |
+| [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) | 测试框架文档 |
+
+## 项目状态
+
+- ✅ 后端 API 实现完成
+- ✅ 测试框架 90 个测试覆盖
+- 🔄 Vue 3 前端开发中
 
 ---
 
-*文档已按最终设计更新*
+*简洁版文档，详见 docs/ 目录*
