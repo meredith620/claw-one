@@ -26,7 +26,7 @@ Harness 不是一成不变的，以下情况**应该**修改：
 | 流程优化 | 改进 CI/CD 流程 | 更新 `specs/release.spec.md` |
 | 修复漏洞 | 发现架构验证漏洞 | 更新 `.entropy-guards/` |
 
-## 修改 Harness 的流程
+## 修改 Harness 的流程（原子提交）
 
 ```
 1. 识别需求
@@ -40,13 +40,68 @@ Harness 不是一成不变的，以下情况**应该**修改：
 5. 更新元数据
    ↓ 修改文件的 HARNESS METADATA 头部
 6. 本地验证
-   ↓ 运行 ./scripts/harness/validate-arch.sh
-7. 提交
-   ↓ 提交消息必须包含 "harness" 关键词
+   ↓ 运行 ./.harness/scripts/validate-arch.sh
+7. 提交（必须原子提交）
+   ↓ git add .harness/ AGENTS.md harness.yaml
+   ↓ git commit -m "harness: update API spec"
 8. Review
    ↓ 建议 PR review，尤其是架构变更
 9. 合并
    ↓ 更新 AGENTS.md 中的 Last Updated
+```
+
+## 原子提交原则
+
+### 什么是原子提交
+
+一个提交应该：
+- **只做一件事** - 所有变更服务于同一个逻辑目的
+- **可独立回滚** - 回滚不会意外影响其他功能
+- **可独立审查** - 审查者能完整理解变更意图
+
+### 错误示例（非原子提交）
+
+```bash
+# ❌ 错误：混合不相关变更
+git add .
+git commit -m "update"
+# 包含了：Harness更新 + 架构修复 + README修改 + 测试文件
+```
+
+### 正确示例（原子提交）
+
+```bash
+# ✅ 正确：Harness 变更单独提交
+git add .harness/ AGENTS.md harness.yaml
+git commit -m "harness: add atomic commit guidelines
+
+- Add enforce-atomic-commits.rule
+- Add prepare-commit.sh helper script
+- Update harness-evolution.spec.md
+
+All changes are related to enforcing atomic commit discipline."
+
+# ✅ 正确：架构修复单独提交  
+git add hull/src/api/logs.rs hull/src/runtime.rs
+git commit -m "refactor: move CLI call to RuntimeManager
+
+Fix architecture violation where API layer directly
+invoked system commands. All system calls now go
+through RuntimeManager.
+
+Fixes harness validation warning."
+```
+
+### 使用辅助工具
+
+```bash
+# 提交前运行辅助脚本
+./.harness/scripts/prepare-commit.sh
+
+# 这将：
+# 1. 显示当前变更按领域分组
+# 2. 建议如何拆分为原子提交
+# 3. 引导你完成每个提交
 ```
 
 ## 文件格式规范

@@ -66,6 +66,7 @@ scripts:
   on_demand:
     validate-arch: .harness/scripts/validate-arch.sh
     list-specs: .harness/scripts/list.sh
+    prepare-commit: .harness/scripts/prepare-commit.sh  # ⭐ 原子提交辅助
 
 # 熵防护规则
 entropy_guards:
@@ -74,6 +75,7 @@ entropy_guards:
     - no-direct-config-modification
     - require-test-coverage
     - enforce-layer-separation
+    - enforce-atomic-commits          # ⭐ 强制原子提交
   
   # 规则触发时机
   triggers:
@@ -81,6 +83,7 @@ entropy_guards:
       - protect-harness-files         # ⭐ 提交前检查 Harness 文件
       - no-direct-config-modification
       - enforce-layer-separation
+      - enforce-atomic-commits        # ⭐ 提交前提醒原子提交
     
     post_commit:
       - require-test-coverage
