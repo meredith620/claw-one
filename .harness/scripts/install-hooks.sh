@@ -33,42 +33,38 @@ fi
 # 确保 hooks 目录存在
 mkdir -p .git/hooks
 
-# 需要链接的 hooks
-declare -A HOOKS
-HOOKS["pre-commit"]=".harness/scripts/pre-commit.sh"
-HOOKS["prepare-commit-msg"]=".harness/scripts/prepare-commit-msg.sh"
-
-# 检查脚本是否存在
-for hook_script in "${HOOKS[@]}"; do
-    if [ ! -f "$hook_script" ]; then
-        echo -e "${RED}❌ 错误: $hook_script 不存在${NC}"
-        exit 1
-    fi
-done
+# 需要链接的 hooks（只包含实际的 git hooks）
+HOOKS=(
+    "pre-commit:.harness/scripts/pre-commit.sh"
+)
 
 echo -e "${YELLOW}安装 Git Hooks...${NC}"
 echo ""
 
-# 链接 pre-commit hook
-if [ -f ".git/hooks/pre-commit" ]; then
-    if grep -q "harness" .git/hooks/pre-commit 2>/dev/null; then
-        echo -e "${GREEN}✓ pre-commit hook 已存在且为 Harness hook${NC}"
-    else
-        echo -e "${YELLOW}⚠️  pre-commit hook 已存在，备份为 pre-commit.orig${NC}"
-        mv .git/hooks/pre-commit .git/hooks/pre-commit.orig
+# 安装每个 hook
+for hook_def in "${HOOKS[@]}"; do
+    hook_name="${hook_def%%:*}"
+    hook_script="${hook_def#*:}"
+    
+    if [ ! -f "$hook_script" ]; then
+        echo -e "${RED}❌ 错误: $hook_script 不存在${NC}"
+        continue
     fi
-fi
-
-echo -e "链接 .harness/scripts/pre-commit.sh → .git/hooks/pre-commit"
-ln -sf ../../.harness/scripts/pre-commit.sh .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-
-# 可选：prepare-commit-msg hook（如果存在）
-if [ -f ".harness/scripts/prepare-commit-msg.sh" ]; then
-    echo -e "链接 .harness/scripts/prepare-commit-msg.sh → .git/hooks/prepare-commit-msg"
-    ln -sf ../../.harness/scripts/prepare-commit-msg.sh .git/hooks/prepare-commit-msg
-    chmod +x .git/hooks/prepare-commit-msg
-fi
+    
+    # 检查是否已存在
+    if [ -f ".git/hooks/$hook_name" ]; then
+        if grep -q "harness" .git/hooks/$hook_name 2>/dev/null; then
+            echo -e "${GREEN}✓ $hook_name hook 已存在且为 Harness hook${NC}"
+        else
+            echo -e "${YELLOW}⚠️  $hook_name hook 已存在，备份为 $hook_name.orig${NC}"
+            mv .git/hooks/$hook_name .git/hooks/$hook_name.orig
+        fi
+    fi
+    
+    echo -e "链接 $hook_script → .git/hooks/$hook_name"
+    ln -sf ../../$hook_script .git/hooks/$hook_name
+    chmod +x .git/hooks/$hook_name
+done
 
 echo ""
 echo -e "${GREEN}✅ Git Hooks 安装完成！${NC}"
@@ -76,12 +72,15 @@ echo ""
 
 # 验证安装
 echo "验证安装..."
-if [ -L .git/hooks/pre-commit ]; then
-    target=$(readlink .git/hooks/pre-commit)
-    echo -e "  ${GREEN}✓${NC} pre-commit → $target"
-else
-    echo -e "  ${RED}✗${NC} pre-commit 链接失败"
-fi
+for hook_def in "${HOOKS[@]}"; do
+    hook_name="${hook_def%%:*}"
+    if [ -L ".git/hooks/$hook_name" ]; then
+        target=$(readlink .git/hooks/$hook_name)
+        echo -e "  ${GREEN}✓${NC} $hook_name → $target"
+    else
+        echo -e "  ${RED}✗${NC} $hook_name 链接失败"
+    fi
+done
 
 echo ""
 echo -e "${BLUE}💡 提示:${NC}"

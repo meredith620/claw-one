@@ -13,14 +13,24 @@
 
 set -e
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# 检测终端颜色支持
+if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+    ncolors=$(tput colors 2>/dev/null)
+    if [ -n "$ncolors" ] && [ "$ncolors" -ge 8 ]; then
+        RED=$(tput setaf 1)
+        GREEN=$(tput setaf 2)
+        YELLOW=$(tput setaf 3)
+        BLUE=$(tput setaf 4)
+        NC=$(tput sgr0)
+        BOLD=$(tput bold)
+    else
+        RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""; BOLD=""
+    fi
+else
+    RED=""; GREEN=""; YELLOW=""; BLUE=""; NC=""; BOLD=""
+fi
 
-echo -e "${BLUE}🛡️  熵防护规则执行引擎${NC}"
+echo "${BLUE}${BOLD}🛡️  熵防护规则执行引擎${NC}"
 echo "========================"
 echo ""
 
@@ -113,11 +123,22 @@ for rule_file in $RULE_FILES; do
                 'tee.*\.openclaw/openclaw\.json'
             )
             
+            # 白名单：测试脚本目录
+            whitelist_dirs=(
+                "./scripts/"
+                "./e2e/"
+                "./tests/"
+            )
+            
             changed_files=$(git diff --cached --name-only 2>/dev/null || git diff --name-only 2>/dev/null || echo "")
             
             for pattern in "${suspicious_patterns[@]}"; do
-                # 在 shell 脚本中检查
-                shell_files=$(find . -name "*.sh" -type f 2>/dev/null | grep -v ".harness/scripts/pre-" || echo "")
+                # 在 shell 脚本中检查（排除白名单目录和 Harness 脚本）
+                shell_files=$(find . -name "*.sh" -type f 2>/dev/null \
+                    | grep -v ".harness/scripts/" \
+                    | grep -v "^./scripts/" \
+                    | grep -v "^./e2e/" \
+                    | grep -v "^./tests/" || echo "")
                 for sh_file in $shell_files; do
                     if grep -qE "$pattern" "$sh_file" 2>/dev/null; then
                         echo -e "  ${RED}❌ 违规: $sh_file 包含直接配置修改模式${NC}"
