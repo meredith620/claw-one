@@ -222,6 +222,26 @@ impl RuntimeManager {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
+    /// 通过 openclaw CLI 获取日志（备用方法）
+    pub async fn get_logs_via_cli(&self, limit: usize) -> Result<String> {
+        let output = Command::new("openclaw")
+            .args([
+                "logs",
+                "--limit",
+                &limit.to_string(),
+            ])
+            .output()
+            .map_err(|e| AppError::Runtime(format!("Failed to execute openclaw logs: {}", e)))?;
+
+        if !output.status.success() {
+            return Err(AppError::Runtime(
+                String::from_utf8_lossy(&output.stderr).to_string()
+            ));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
     /// 从日志中分类错误类型
     pub fn classify_error(log_content: &str) -> Option<ErrorType> {
         // 配置错误关键词

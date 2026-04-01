@@ -1,0 +1,138 @@
+---
+# HARNESS METADATA
+# type: manifest
+# part-of: harness-architecture
+# managed-by: harness-system
+# do-not-modify-manually: 如需修改请遵循 harness-evolution.spec.md
+# version: 1.0
+# created: 2026-04-01
+---
+
+# Harness Manifest 文件
+# 显式声明 Harness 结构和加载规则
+
+version: "1.0"
+project:
+  name: claw-one
+  type: rust-web-service
+  description: OpenClaw 配置管理界面
+
+# 发现规则
+discovery:
+  # 入口文档（Agent 首先加载）
+  entry_points:
+    - AGENTS.md
+  
+  # 规范文档目录
+  spec_dirs:
+    - .harness/specs
+  
+  # 脚本目录
+  script_dirs:
+    - .harness/scripts
+  
+  # 熵防护规则目录
+  guard_dirs:
+    - .harness/guards
+
+# 规范文档加载顺序（覆盖默认字母顺序）
+specs:
+  order:
+    - harness-evolution.spec.md   # 元规范（如何修改 Harness）
+    - api.spec.md
+    - config.constraint.md
+    - architecture.constraint.md
+    - testing.spec.md
+    - release.spec.md
+  
+  # 条件加载
+  conditions:
+    - file: harness-evolution.spec.md
+      when: "file_changed('harness.yaml') || file_changed('specs/*.md') || file_changed('.entropy-guards/*')"
+    - file: release.spec.md
+      when: "task_type == 'release' || file_changed('Cargo.toml')"
+
+# 脚本触发规则
+scripts:
+  # 提交前自动运行
+  pre_commit:
+    - .harness/scripts/pre-commit.sh
+  
+  # 配置变更前
+  pre_config_change:
+    - .harness/scripts/pre-config-change.sh
+  
+  # 手动触发
+  on_demand:
+    validate-arch: .harness/scripts/validate-arch.sh
+    list-specs: .harness/scripts/list.sh
+
+# 熵防护规则
+entropy_guards:
+  enabled:
+    - protect-harness-files           # ⭐ 保护 Harness 文件本身
+    - no-direct-config-modification
+    - require-test-coverage
+    - enforce-layer-separation
+  
+  # 规则触发时机
+  triggers:
+    pre_commit:
+      - protect-harness-files         # ⭐ 提交前检查 Harness 文件
+      - no-direct-config-modification
+      - enforce-layer-separation
+    
+    post_commit:
+      - require-test-coverage
+    
+    pre_push:                         # ⭐ 推送前额外检查
+      - protect-harness-files
+
+# Agent 特定配置
+agents:
+  openclaw:
+    # OpenClaw 额外加载的文档
+    extra_specs: []
+    
+    # 提供的 Harness 技能
+    skills:
+      - name: harness
+        description: Harness 工具集合
+        commands:
+          - name: list
+            script: .harness/scripts/list.sh
+          - name: validate
+            script: .harness/scripts/validate-arch.sh
+          - name: pre-commit
+            script: .harness/scripts/pre-commit.sh
+  
+  claude:
+    extra_context:
+      - CLAUDE.md
+    
+    commands:
+      validate:
+        description: 验证架构合规性
+        script: .harness/scripts/validate-arch.sh
+      
+      check-config:
+        description: 配置变更前检查
+        script: .harness/scripts/pre-config-change.sh
+
+# 环境特定配置
+environments:
+  dev:
+    # 开发环境禁用严格检查
+    entropy_guards:
+      severity_override:
+        require-test-coverage: info
+  
+  ci:
+    # CI 环境启用所有检查
+    scripts:
+      post_test:
+        - scripts/harness/validate-arch.sh
+  
+  prod:
+    # 生产环境禁用修改
+    read_only: true

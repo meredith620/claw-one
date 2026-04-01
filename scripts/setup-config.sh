@@ -60,16 +60,12 @@ init_config() {
     if [ ! -f "$CONFIG_DIR/claw-one.toml" ]; then
         print_info "创建默认配置文件"
         cat > "$CONFIG_DIR/claw-one.toml" << 'EOF'
-# Claw One 配置文件
-
-# 服务端口
+[server]
 port = 8080
-
-# OpenClaw 配置路径
-openclaw_home = "~/.openclaw"
-
-# 日志级别: debug, info, warn, error
 log_level = "info"
+
+[openclaw]
+openclaw_home = "~/.openclaw"
 EOF
         print_ok "默认配置已创建"
     fi

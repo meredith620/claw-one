@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://claw.one/schemas/memory-config.json",
+  "title": "Memory Configuration",
+  "description": "API contract for /api/memory endpoint",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether memory search is enabled"
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["ollama", "openai"],
+      "description": "The provider for embedding models"
+    },
+    "remote": {
+      "type": "object",
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Base URL for the provider API"
+        }
+      },
+      "required": ["baseUrl"]
+    },
+    "model": {
+      "type": "string",
+      "description": "The embedding model to use"
+    },
+    "fallback": {
+      "type": "string",
+      "enum": ["none", "bm25"],
+      "description": "Fallback search method"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["memory", "sessions"]
+      },
+      "description": "Sources to search in"
+    },
+    "query": {
+      "type": "object",
+      "properties": {
+        "hybrid": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "store": {
+      "type": "object",
+      "properties": {
+        "vector": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "sync": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "object",
+          "properties": {
+            "deltaBytes": { "type": "number" },
+            "deltaMessages": { "type": "number" }
+          }
+        }
+      }
+    }
+  },
+  "required": ["enabled", "provider"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "enabled": true,
+      "provider": "ollama",
+      "remote": {
+        "baseUrl": "http://localhost:11434"
+      },
+      "model": "qwen3-embedding:0.6b",
+      "fallback": "none",
+      "sources": ["memory", "sessions"]
+    }
+  ]
+}

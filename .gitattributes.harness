@@ -1,0 +1,17 @@
+# Harness 架构文件标记
+# 这些文件属于项目 Harness 架构，修改需谨慎
+
+# 入口文档
+AGENTS.md       linguist-documentation harness=true
+
+# Manifest
+harness.yaml    linguist-documentation harness=true
+
+# 规范文档
+specs/*.md      linguist-documentation harness=true
+
+# 脚本
+scripts/harness/*.sh    linguist-documentation harness=true
+
+# 熵防护规则
+.entropy-guards/*.rule  linguist-documentation harness=true

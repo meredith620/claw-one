@@ -193,7 +193,7 @@ make dist VERSION=1.0.0
 ```
 ~/claw-one/              # 安装目录
 ├── bin/
-│   └── claw-one # 核心程序
+│   └── claw-one         # 核心程序
 ├── share/
 │   └── static/          # 前端静态文件
 ├── config/
@@ -204,7 +204,47 @@ make dist VERSION=1.0.0
 ├── config.git/          # Git 仓库
 ├── factory-config.json  # 出厂配置备份
 └── ...
+
+项目源码/
+├── AGENTS.md            # ⭐ AI Agent 入口文档
+├── harness.yaml         # ⭐ Harness 配置
+├── .harness/            # 📁 Harness 架构文件
+│   ├── specs/           # 开发规范
+│   ├── scripts/         # 验证脚本
+│   └── guards/          # 熵防护规则
+├── hull/                # Rust 后端
+├── bridge/              # Vue 3 前端
+└── ...
 ```
+
+## 🤖 AI Agent 开发指南
+
+本项目使用 **Harness Architecture** 规范 AI Agent 的开发行为。
+
+### 快速开始
+
+```bash
+# 查看所有 Harness 文档
+./.harness/scripts/list.sh
+
+# 提交前检查
+./.harness/scripts/pre-commit.sh
+
+# 架构合规验证
+./.harness/scripts/validate-arch.sh
+```
+
+### 开发规范
+
+| 任务类型 | 参考文档 |
+|----------|----------|
+| API 开发 | `.harness/specs/api.spec.md` |
+| 配置变更 | `.harness/specs/config.constraint.md` |
+| 架构修改 | `.harness/specs/architecture.constraint.md` |
+| 编写测试 | `.harness/specs/testing.spec.md` |
+| 发布构建 | `.harness/specs/release.spec.md` |
+
+详见 [AGENTS.md](AGENTS.md)
 
 ## systemd 用户服务
 

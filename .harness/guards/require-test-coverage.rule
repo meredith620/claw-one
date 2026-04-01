@@ -1,0 +1,46 @@
+# 熵防护规则: 强制测试覆盖
+# 确保关键代码变更包含测试
+
+name: require-test-for-critical-changes
+severity: warning
+description: 修改关键模块时必须包含对应测试更新
+
+triggers:
+  # 文件变更触发
+  files:
+    - 'hull/src/config.rs'
+    - 'hull/src/state.rs'
+    - 'hull/src/validation.rs'
+    - 'hull/src/api/*.rs'
+
+conditions:
+  # 源文件变更时检查测试是否也变更
+  - type: file_changed
+    pattern: 'hull/src/(.*)\.rs'
+    require:
+      - 'hull/tests/*${1}*'
+      - 'hull/src/${1}.rs'
+
+  # 或检查测试是否已存在
+  - type: test_exists
+    for: 'hull/src/config.rs'
+    test: 'hull/tests/api_config.rs'
+
+message: |
+  ⚠️ 检测到关键模块变更
+  
+  请在提交前确认：
+  - [ ] 新增功能有对应单元测试
+  - [ ] API 变更有对应集成测试
+  - [ ] 边缘场景有对应错误测试
+  
+  运行测试确认：
+  make test-fast
+
+severity_rules:
+  # 第一次提交：警告
+  # 连续多次：升级为错误
+  - if: 'commit_count < 3'
+    severity: warning
+  - if: 'commit_count >= 3'
+    severity: error

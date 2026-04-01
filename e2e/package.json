@@ -1,0 +1,14 @@
+{
+  "name": "claw-one-e2e-tests",
+  "version": "1.0.0",
+  "description": "E2E tests for Claw One using Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "install:playwright": "playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}
