@@ -139,7 +139,7 @@ claw-one/
 - **错误处理**: 使用 `thiserror` 定义错误类型，`anyhow` 进行上下文传播
 - **异步**: Tokio 运行时，axum 处理 HTTP
 - **日志**: tracing 结构化日志
-- **测试**: 三层测试架构（见 TEST_FRAMEWORK.md）
+- **测试**: 三层测试架构（见 [`.harness/specs/testing.spec.md`](.harness/specs/testing.spec.md)，详细文档见 [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md)）
 
 ### 关键模式
 
@@ -163,10 +163,35 @@ Layer 2: 集成测试 (37个)    → cargo test --test api_*
 Layer 3: E2E 测试 (10个)    → make test-e2e
 ```
 
-**运行测试前必须检查:**
+### 测试分层
+
+| 层级 | 范围 | 依赖 | 位置 |
+|------|------|------|------|
+| Layer 1 | 单个模块内部逻辑 | 无外部依赖 | `hull/src/*.rs` 中的 `#[cfg(test)]` |
+| Layer 2 | API 端点 + 模块交互 | Mock Runtime | `hull/tests/*.rs` |
+| Layer 3 | 完整用户流程 | Docker + OpenClaw | `e2e/tests/*.sh` |
+
+### E2E 测试辅助
+
+E2E 测试使用 `e2e/tests/assert.sh` 中的标准断言函数：
+
+```bash
+# 引入辅助函数
+source "$(dirname "$0")/assert.sh"
+
+# 使用断言
+assert_eq "$STATE" "normal" "初始状态应为 normal"
+assert_contains "$CONFIG" "openai" "配置应包含 provider"
+assert_json_eq "$RESP" ".status" "ok" "状态应为 ok"
+```
+
+### 运行测试前必须检查
+
 1. `cargo check` 无编译错误
 2. `cargo clippy` 无警告
 3. `make test-fast` 通过
+
+> 详细测试规范、覆盖率目标、fixtures 使用见 [`.harness/specs/testing.spec.md`](.harness/specs/testing.spec.md)
 
 ## 架构约束
 

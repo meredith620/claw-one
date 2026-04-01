@@ -161,6 +161,15 @@ health_port = 18791
 | `make check-env` | 检测安装环境依赖 |
 | `make clean` | 清理构建产物 |
 
+### 测试
+
+| 命令 | 说明 |
+|------|------|
+| `make test-fast` | 快速测试 (Layer 1+2，~30秒) |
+| `make test-e2e` | E2E 测试 (Layer 3，~2-3分钟) |
+
+> 详细测试规范见 [AGENTS.md](AGENTS.md) 或 `.harness/specs/testing.spec.md`
+
 ### 分发包安装脚本
 
 分发包中的 `install.sh` 支持以下命令：
