@@ -1,6 +1,6 @@
 .PHONY: all build hull bridge dev clean deps test help dist dist-native dist-check \
         builder builder-build builder-clean builder-rebuild \
-        install install-native
+        install install-native harness-install
 
 # 版本和架构
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
@@ -41,6 +41,9 @@ help:
 	@echo "其他:"
 	@echo "  make dist-check    - 生成校验和"
 	@echo "  make install       - 创建自解压脚本 (等同于 make dist)"
+	@echo ""
+	@echo "Harness (AI Agent 开发环境):"
+	@echo "  make harness-install - 安装 Git Hooks 启用 Harness 自动检查"
 
 # 构建前后端
 build: hull bridge
@@ -275,3 +278,12 @@ dist-check: dist
 	@echo "✅ 校验和已生成: dist/SHA256SUMS"
 	@echo ""
 	@cat dist/SHA256SUMS
+
+# ============================================================
+# Harness (AI Agent 开发环境)
+# ============================================================
+
+# 安装 Harness Git Hooks
+harness-install:
+	@echo "🪝 安装 Harness Git Hooks..."
+	@./.harness/scripts/install-hooks.sh

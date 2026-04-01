@@ -41,7 +41,18 @@ if [ -d ".harness/scripts" ]; then
         name=$(basename "$script")
         
         # 提取描述
-        desc=$(grep -m1 "^# " "$script" 2>/dev/null | sed 's/^# //' || echo "$name")
+        # 跳过 shebang、HARNESS METADATA 头部的 key-value 行，找到第一个短描述行
+        desc=$(awk '
+            BEGIN { in_meta=0 }
+            NR==1 && /^#!/ { next }  # 跳过 shebang
+            /^# HARNESS METADATA/ { in_meta=1; next }
+            in_meta && /^# [a-z-]+:/ { next }  # 跳过 key-value 行
+            in_meta && /^#$/ { in_meta=0; next }  # 空行结束 metadata
+            in_meta && /^# --/ { in_meta=0; next }  # 分隔行结束 metadata
+            in_meta { next }  # 跳过其他 metadata 行
+            /^# [^#]/ { sub(/^# /, ""); print; exit }  # 第一行描述
+            /^#$/ { next }  # 跳过空注释行
+        ' "$script" 2>/dev/null || echo "$name")
         
         printf "  • %-25s %s\n" "$name" "$desc"
     done

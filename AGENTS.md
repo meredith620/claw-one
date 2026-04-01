@@ -55,6 +55,43 @@ make dev              # 前台运行，Ctrl+C 停止
 
 访问 http://localhost:8080
 
+### Harness 安装与设置 ⚙️
+
+**重要**：首次克隆项目后，需要运行以下命令来启用 Harness 的自动检查功能：
+
+```bash
+# 1. 链接 Git Pre-Commit Hook（自动运行架构验证和提交前检查）
+make harness-install
+
+# 或手动链接：
+ln -sf ../../.harness/scripts/pre-commit.sh .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+# 2. 验证 Harness 安装
+./.harness/scripts/list.sh
+
+# 3. 运行架构验证
+./.harness/scripts/validate-arch.sh
+```
+
+**Harness 工具说明**：
+
+| 命令 | 说明 |
+|------|------|
+| `./.harness/scripts/list.sh` | 列出所有 Harness 文档和工具 |
+| `./.harness/scripts/validate-arch.sh` | 运行架构合规性检查 |
+| `./.harness/scripts/pre-commit.sh` | 提交前自动检查（被 git hook 调用） |
+| `./.harness/scripts/prepare-commit.sh` | 原子提交辅助工具 |
+| `./.harness/scripts/evaluate-guards.sh` | 运行熵防护规则检查 |
+
+**未安装时的手动检查**：
+
+如果 git hook 未链接，提交前请手动运行：
+```bash
+./.harness/scripts/pre-commit.sh
+./.harness/scripts/validate-arch.sh
+```
+
 ### 常用命令
 
 | 命令 | 说明 |
