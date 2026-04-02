@@ -85,7 +85,7 @@
 
     <!-- 保存按钮 -->
     <div class="actions">
-      <el-button type="primary" size="large" @click="saveChannels" :loading="saving">保存 Channel 配置</el-button>
+      <el-button type="primary" size="large" @click="handleSaveChannels" :loading="saving">保存 Channel 配置</el-button>
     </div>
 
     <!-- 添加/编辑 Mattermost 账号对话框 -->
@@ -115,7 +115,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getChannels, saveChannels } from '../api'
+import { getChannels, saveChannels as saveChannelsApi } from '../api'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -198,7 +198,7 @@ const deleteMattermostAccount = async (id: string) => {
 const saveChannelsData = async () => {
   saving.value = true
   try {
-    await saveChannels({ ...channels })
+    await saveChannelsApi({ ...channels })
     ElMessage.success('保存成功')
   } catch (error: any) {
     ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
@@ -207,7 +207,7 @@ const saveChannelsData = async () => {
   }
 }
 
-const saveChannels = async () => {
+const handleSaveChannels = async () => {
   await saveChannelsData()
 }
 
