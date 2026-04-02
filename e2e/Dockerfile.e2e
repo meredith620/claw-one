@@ -1,7 +1,13 @@
 # 使用官方 Rust 镜像构建
-FROM rust:1.85-slim-bookworm as builder
+FROM rust:1.88-slim-bookworm as builder
 
 WORKDIR /app
+
+# 安装编译依赖
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # 复制 hull 目录
 COPY hull/Cargo.toml hull/Cargo.lock ./

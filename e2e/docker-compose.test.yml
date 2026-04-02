@@ -2,11 +2,13 @@ services:
   openclaw:
     image: ghcr.io/openclaw/openclaw:2026.3.13-1
     container_name: claw-one-test-openclaw
-    command: openclaw-gateway --allow-unconfigured
+    command: ["/usr/local/bin/openclaw", "gateway", "--allow-unconfigured"]
+    user: "0:0"  # 以 root 用户运行避免权限问题
+    restart: unless-stopped  # 自动重启
     ports:
       - "28789:18789"  # 非标准端口，避免冲突
     volumes:
-      - openclaw-config:/home/node/.openclaw:rw
+      - openclaw-config:/root/.openclaw:rw  # 使用 root 用户目录
     networks:
       - claw-one-test-net
     healthcheck:

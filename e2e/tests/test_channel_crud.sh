@@ -37,7 +37,7 @@ echo "$SAVED_CONFIG" | grep -q '"test-channel"' || { echo "Channel not found in 
 echo "$SAVED_CONFIG" | grep -q '"name":"Test Channel"' || { echo "Channel name not found"; exit 1; }
 
 echo "4. Verifying openclaw.json..."
-docker exec claw-one-test-openclaw cat /home/node/.openclaw/openclaw.json | grep -q "test-channel" || { echo "Channel not in config"; exit 1; }
+docker exec claw-one-test-openclaw cat /root/.openclaw/openclaw.json | grep -q "test-channel" || { echo "Channel not in config"; exit 1; }
 
 echo "5. Updating channel..."
 # Update by saving complete config with modified channel
@@ -78,7 +78,7 @@ curl -s -X POST "$BASE_URL/api/channels" \
 echo "8. Verifying deletion..."
 FINAL_CONFIG=$(curl -s "$BASE_URL/api/channels")
 ! echo "$FINAL_CONFIG" | grep -q '"test-channel"' || { echo "Channel still exists"; exit 1; }
-! docker exec claw-one-test-openclaw cat /home/node/.openclaw/openclaw.json | grep -q "test-channel" || { echo "Channel still in config"; exit 1; }
+! docker exec claw-one-test-openclaw cat /root/.openclaw/openclaw.json | grep -q "test-channel" || { echo "Channel still in config"; exit 1; }
 
 echo "✅ Channel CRUD test passed"
 exit 0

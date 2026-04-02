@@ -34,7 +34,7 @@ echo "$SAVED_CONFIG" | grep -q '"provider":"ollama"' || { echo "Memory provider 
 echo "$SAVED_CONFIG" | grep -q '"model":"test-memory-model"' || { echo "Memory model not found"; exit 1; }
 
 echo "4. Verifying openclaw.json..."
-docker exec claw-one-test-openclaw cat /home/node/.openclaw/openclaw.json | grep -q "test-memory-model" || { echo "Memory not in config"; exit 1; }
+docker exec claw-one-test-openclaw cat /root/.openclaw/openclaw.json | grep -q "test-memory-model" || { echo "Memory not in config"; exit 1; }
 
 echo "5. Updating memory config..."
 curl -s -X POST "$BASE_URL/api/memory" \

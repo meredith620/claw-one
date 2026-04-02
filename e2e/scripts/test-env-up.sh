@@ -13,7 +13,7 @@ if docker ps | grep -q "claw-one-test"; then
 fi
 
 # Start services
-docker-compose -f docker-compose.test.yml up -d --build
+docker compose -f docker-compose.test.yml up -d --build
 
 echo "=== Waiting for services to be ready ==="
 sleep 5

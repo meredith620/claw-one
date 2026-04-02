@@ -78,7 +78,7 @@ echo "✅ 初始化完成"
 # Step 6: Verify configuration is saved to openclaw.json
 echo ""
 echo "Step 6: 验证配置已保存..."
-CONFIG_CHECK=$(docker exec claw-one-test-openclaw cat /home/node/.openclaw/openclaw.json)
+CONFIG_CHECK=$(docker exec claw-one-test-openclaw cat /root/.openclaw/openclaw.json)
 
 if echo "$CONFIG_CHECK" | grep -q "moonshot-main"; then
     echo "✅ Provider 配置已保存到 openclaw.json"

@@ -42,7 +42,7 @@ echo "$SAVED_CONFIG" | grep -q '"id":"test-agent"' || { echo "Agent not found in
 echo "$SAVED_CONFIG" | grep -q '"name":"Test Agent"' || { echo "Agent name not found"; exit 1; }
 
 echo "4. Verifying openclaw.json..."
-docker exec claw-one-test-openclaw cat /home/node/.openclaw/openclaw.json | grep -q "test-agent" || { echo "Agent not in config"; exit 1; }
+docker exec claw-one-test-openclaw cat /root/.openclaw/openclaw.json | grep -q "test-agent" || { echo "Agent not in config"; exit 1; }
 
 echo "5. Updating agent..."
 # Update by saving complete config with modified agent
@@ -82,7 +82,7 @@ curl -s -X POST "$BASE_URL/api/agents" \
 echo "8. Verifying deletion..."
 FINAL_CONFIG=$(curl -s "$BASE_URL/api/agents")
 ! echo "$FINAL_CONFIG" | grep -q '"id":"test-agent"' || { echo "Agent still exists"; exit 1; }
-! docker exec claw-one-test-openclaw cat /home/node/.openclaw/openclaw.json | grep -q "test-agent" || { echo "Agent still in config"; exit 1; }
+! docker exec claw-one-test-openclaw cat /root/.openclaw/openclaw.json | grep -q "test-agent" || { echo "Agent still in config"; exit 1; }
 
 echo "✅ Agent CRUD test passed"
 exit 0
