@@ -7,7 +7,7 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
     
-    use crate::{
+    use claw_one::{
         config::ConfigManager,
         runtime::ErrorType,
         settings::OpenClawConfig,
@@ -43,7 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_initial_state_is_normal() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         let state = state_manager.get_state().await;
         assert!(matches!(state, AppState::Normal));
@@ -51,7 +51,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_enter_safe_mode_config_error() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         // 手动进入 SafeMode
         state_manager.enter_safe_mode(
@@ -75,7 +75,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_enter_safe_mode_system_error() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         state_manager.enter_safe_mode(
             ErrorType::System,
@@ -96,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_enter_safe_mode_with_auto_rollback() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         state_manager.enter_safe_mode(
             ErrorType::Config,
@@ -118,9 +118,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_state_response_normal() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
-        let response = state_manager.get_state_response().await;
+        let response: Result<claw_one::types::StateResponse, claw_one::error::AppError> = state_manager.get_state_response().await;
         assert!(response.is_ok());
         
         let response = response.unwrap();
@@ -130,7 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_state_response_safe_mode() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         // 进入 SafeMode
         state_manager.enter_safe_mode(
@@ -140,7 +140,7 @@ mod tests {
             Some("last-good-commit".to_string()),
         ).await;
         
-        let response = state_manager.get_state_response().await;
+        let response: Result<claw_one::types::StateResponse, claw_one::error::AppError> = state_manager.get_state_response().await;
         assert!(response.is_ok());
         
         let response = response.unwrap();
@@ -154,7 +154,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_safe_mode_to_normal_recovery() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         // 1. 进入 SafeMode
         state_manager.enter_safe_mode(
@@ -170,7 +170,7 @@ mod tests {
         // 2. 尝试恢复
         // 注意：实际恢复需要 RuntimeManager 能成功重启服务
         // 这里只测试状态转换逻辑
-        let result = state_manager.recover_from_safe_mode().await;
+        let result: std::result::Result<(), claw_one::error::AppError> = state_manager.recover_from_safe_mode().await;
         
         // 结果取决于实际服务状态，可能成功或失败
         println!("Recovery result: {:?}", result);
@@ -178,10 +178,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_recover_from_safe_mode_when_not_in_safe_mode() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         // 当前是 Normal 状态，尝试恢复应该失败
-        let result = state_manager.recover_from_safe_mode().await;
+        let result: std::result::Result<(), claw_one::error::AppError> = state_manager.recover_from_safe_mode().await;
         assert!(result.is_err());
         
         let err_msg = format!("{}", result.unwrap_err());
@@ -192,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_apply_config_sets_applying_state() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         // 准备新配置
         let new_config = serde_json::json!({
@@ -222,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_current_version_from_git() {
-        let (temp_dir, state_manager) = create_test_state_manager().await;
+        let (temp_dir, _state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         // 初始化 Git 仓库并创建提交
         let version_config_dir = temp_dir.path().join("version-config");
@@ -265,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_safe_mode_with_empty_message() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         state_manager.enter_safe_mode(
             ErrorType::Config,
@@ -280,7 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_safe_mode_with_long_message() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         
         let long_message = "Error: ".to_string() + &"x".repeat(10000);
         
@@ -297,7 +297,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_state_access() {
-        let (_temp_dir, state_manager) = create_test_state_manager().await;
+        let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
         let state_manager = Arc::new(state_manager);
         
         // 创建多个并发任务读取状态

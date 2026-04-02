@@ -21,8 +21,10 @@ pub async fn handler(
     Query(query): Query<LogsQuery>,
 ) -> Result<Json<serde_json::Value>> {
     // 优先尝试直接读文件（无需 Runtime）
-    let logs = get_logs_from_file(query.limit).await
-        .or_else(|_| get_logs_from_runtime(query.limit).await)?;
+    let logs = match get_logs_from_file(query.limit).await {
+        Ok(logs) => logs,
+        Err(_) => get_logs_from_runtime(query.limit).await?,
+    };
 
     Ok(Json(serde_json::json!({
         "logs": logs,
