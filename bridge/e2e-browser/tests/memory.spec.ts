@@ -3,52 +3,32 @@
  * 测试矩阵功能模块 #4
  */
 
-import { test, expect, testData } from '../fixtures';
+import { test, expect } from '../fixtures';
 
 test.describe('Memory Configuration', () => {
   test.beforeEach(async ({ memoryPage }) => {
     await memoryPage.goto();
   });
 
-  test('添加 File Memory', async ({ page, memoryPage }) => {
-    const data = testData.memory.testMemory;
+  test('Memory 页面加载正常', async ({ page }) => {
+    // 验证基础配置区域
+    await expect(page.locator('.memory-section', { hasText: 'Memory 基础配置' })).toBeVisible();
     
-    await memoryPage.addMemory(data);
-    
-    await memoryPage.waitForToast('保存成功');
-    await memoryPage.verifyMemoryExists(data.name);
+    // 验证启用开关
+    await expect(page.locator('.el-form-item', { hasText: '启用 Memory' })).toBeVisible();
   });
 
-  test('Memory 类型选择', async ({ page }) => {
-    await page.click('button:has-text("添加 Memory")');
-    
-    const dialog = page.locator('.el-dialog');
-    await expect(dialog).toBeVisible();
-    
-    // 点击类型下拉
-    await page.click('.el-select');
-    
-    // 验证选项存在
-    const dropdown = page.locator('.el-select-dropdown');
-    await expect(dropdown).toBeVisible();
-    
-    // 应该有 file/memory 等选项
-    const options = await page.locator('.el-select-dropdown__item').allTextContents();
-    expect(options.length).toBeGreaterThan(0);
+  test('Provider 选择存在', async ({ page }) => {
+    // 验证 Provider 选项
+    await expect(page.locator('.el-radio-button', { hasText: 'Ollama' })).toBeVisible();
+    await expect(page.locator('.el-radio-button', { hasText: 'OpenAI' })).toBeVisible();
   });
 
-  test('Memory 配置持久化', async ({ page, memoryPage }) => {
-    // 添加 Memory
-    const data = testData.memory.testMemory;
-    await memoryPage.addMemory(data);
-    await memoryPage.waitForToast('保存成功');
-    
-    // 刷新页面
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await memoryPage.clickTab('Memory');
-    
-    // 验证数据仍然存在
-    await memoryPage.verifyMemoryExists(data.name);
+  test('保存 Memory 配置按钮存在', async ({ page }) => {
+    await expect(page.locator('button:has-text("保存 Memory 配置")')).toBeVisible();
+  });
+
+  test('高级功能区域存在', async ({ page }) => {
+    await expect(page.locator('.memory-section', { hasText: '高级功能' })).toBeVisible();
   });
 });

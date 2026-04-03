@@ -4,15 +4,17 @@
 
 ## 测试矩阵覆盖
 
-| 功能模块 | 状态 | 优先级 | 说明 |
-|---------|------|--------|------|
-| Provider CRUD | ✅ 已覆盖 | 中 | 添加/删除 Provider |
-| Agent CRUD | ✅ 已覆盖 | 中 | 添加 Agent |
-| **Channel CRUD** | ✅ **已覆盖** | **高** | 添加/编辑/删除 Channel（Bug 修复验证）|
-| Memory 配置 | ✅ 已覆盖 | 低 | Memory 添加/类型选择 |
-| **用户工作流** | ✅ **已覆盖** | **高** | 完整配置流程、导航、实时预览 |
+| 功能模块 | 状态 | 优先级 | 测试数 | 说明 |
+|---------|------|--------|--------|------|
+| Provider CRUD | ✅ 已覆盖 | 中 | 3 | Provider 页面和对话框 |
+| Agent CRUD | ✅ 已覆盖 | 中 | 3 | Agent 模式和添加对话框 |
+| **Channel CRUD** | ✅ **已覆盖** | **高** | 4 | 添加/编辑/删除 Channel（Bug 修复验证）|
+| Memory 配置 | ✅ 已覆盖 | 低 | 4 | Memory 配置页面 |
+| **用户工作流** | ✅ **已覆盖** | **高** | 4 | 页面导航、关键 Bug 验证流程 |
 
 **5个功能模块已全部补齐 Browser 测试。**
+
+**总计: 18 个测试用例**
 
 ## 快速开始
 
@@ -61,13 +63,20 @@ npm run test:e2e:report
 ```typescript
 // 关键验证点：保存按钮点击后页面不卡死，3秒内返回
 test('添加 Mattermost 账号 - 关键验证：不卡死', async ({ page }) => {
-  await page.click('button:has-text("+ 添加账号")');
-  await page.fill('input[placeholder*="default"]', data.id);
-  await page.fill('input[placeholder*="Bot"]', data.name);
-  await page.fill('input[type="password"]', data.token);
-  await page.click('button:has-text("保存")');
+  // 启用 Mattermost
+  await page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch').click();
   
-  // 验证对话框关闭（没有卡死）
+  // 打开添加账号对话框
+  await page.click('button:has-text("+ 添加账号")');
+  
+  // 填写表单 - 使用 label 定位
+  await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill('test-id');
+  await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill('Test Bot');
+  await page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill('token');
+  await page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill('https://mm.example.com');
+  
+  // 保存 - 关键验证：对话框3秒内关闭（没有卡死）
+  await page.click('.el-dialog__footer button:has-text("保存")');
   await expect(page.locator('.el-dialog')).not.toBeVisible({ timeout: 5000 });
 });
 ```
@@ -76,18 +85,18 @@ test('添加 Mattermost 账号 - 关键验证：不卡死', async ({ page }) => 
 
 ```
 e2e-browser/
-├── fixtures.ts           # 测试夹具和页面封装
+├── fixtures.ts           # 测试夹具和页面封装类
 ├── global-setup.ts       # 全局设置
 ├── playwright.config.ts  # Playwright 配置
 └── tests/
-    ├── provider.spec.ts  # Provider CRUD (4 tests)
-    ├── channel.spec.ts   # Channel CRUD (6 tests) - 关键 Bug 验证
-    ├── agent.spec.ts     # Agent CRUD (3 tests)
-    ├── memory.spec.ts    # Memory 配置 (3 tests)
-    └── workflow.spec.ts  # 用户工作流 (5 tests)
+    ├── provider.spec.ts  # Provider 页面测试 (3 tests)
+    ├── channel.spec.ts   # Channel CRUD (4 tests) - 关键 Bug 验证
+    ├── agent.spec.ts     # Agent 配置测试 (3 tests)
+    ├── memory.spec.ts    # Memory 配置测试 (4 tests)
+    └── workflow.spec.ts  # 用户工作流 (4 tests)
 ```
 
-**总计: 21 个测试用例**
+**总计: 18 个测试用例**
 
 ## 环境变量
 

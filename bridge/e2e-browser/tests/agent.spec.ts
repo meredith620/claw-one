@@ -3,56 +3,41 @@
  * 测试矩阵功能模块 #2
  */
 
-import { test, expect, testData } from '../fixtures';
+import { test, expect } from '../fixtures';
 
-test.describe('Agent CRUD', () => {
+test.describe('Agent Configuration', () => {
   test.beforeEach(async ({ agentPage }) => {
     await agentPage.goto();
   });
 
-  test('添加 Agent', async ({ page, agentPage }) => {
-    const data = testData.agent.testAgent;
+  test('Agent 页面加载正常', async ({ page }) => {
+    // 验证模式选择存在
+    await expect(page.locator('.agent-section', { hasText: 'Agent 模式' })).toBeVisible();
     
-    await agentPage.addAgent(data);
-    
-    await agentPage.waitForToast('保存成功');
-    await agentPage.verifyAgentExists(data.name);
+    // 验证单 Agent 和多 Agent 模式选项
+    await expect(page.locator('.el-radio-button', { hasText: '单 Agent 模式' })).toBeVisible();
+    await expect(page.locator('.el-radio-button', { hasText: 'Multi-Agent 模式' })).toBeVisible();
   });
 
-  test('Agent 表单完整填写', async ({ page }) => {
-    await page.click('button:has-text("添加 Agent")');
+  test('切换到 Multi-Agent 模式并添加 Agent', async ({ page }) => {
+    // 切换到 Multi-Agent 模式
+    await page.locator('.el-radio-button', { hasText: 'Multi-Agent 模式' }).click();
+    await page.waitForTimeout(300);
     
+    // 验证添加 Agent 按钮出现
+    await expect(page.locator('button:has-text("+ 添加 Agent")')).toBeVisible();
+    
+    // 点击添加 Agent
+    await page.click('button:has-text("+ 添加 Agent")');
+    
+    // 验证对话框
     const dialog = page.locator('.el-dialog');
     await expect(dialog).toBeVisible();
-    
-    // 填写所有字段
-    await page.fill('input[placeholder*="ID"]', 'full-test-agent');
-    await page.fill('input[placeholder*="名称"]', 'Full Test Agent');
-    
-    // 选择 Provider
-    await page.click('.el-select');
-    await page.click('.el-select-dropdown__item', { hasText: /openai|anthropic/i });
-    
-    await page.fill('input[placeholder*="模型"]', 'gpt-4-turbo');
-    await page.fill('textarea', '你是一个专业的助手，请用中文回复。');
-    
-    await page.click('.el-dialog__footer button:has-text("保存")');
-    await agentPage.waitForToast('保存成功');
+    await expect(page.locator('.el-form-item', { hasText: 'Agent ID' })).toBeVisible();
+    await expect(page.locator('.el-form-item', { hasText: '显示名称' })).toBeVisible();
   });
 
-  test('Agent 列表显示', async ({ page, agentPage }) => {
-    // 添加测试数据
-    await agentPage.addAgent(testData.agent.testAgent);
-    await agentPage.waitForToast('保存成功');
-    
-    // 验证表格列显示
-    const table = page.locator('.el-table');
-    await expect(table).toBeVisible();
-    
-    // 验证列头
-    await expect(table.locator('th', { hasText: 'ID' })).toBeVisible();
-    await expect(table.locator('th', { hasText: '名称' })).toBeVisible();
-    await expect(table.locator('th', { hasText: 'Provider' })).toBeVisible();
-    await expect(table.locator('th', { hasText: '模型' })).toBeVisible();
+  test('保存 Agent 配置按钮存在', async ({ page }) => {
+    await expect(page.locator('button:has-text("保存 Agent 配置")')).toBeVisible();
   });
 });

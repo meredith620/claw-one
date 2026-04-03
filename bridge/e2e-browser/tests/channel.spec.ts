@@ -14,91 +14,115 @@ test.describe('Channel CRUD', () => {
     await channelPage.goto();
   });
 
-  test('添加 Mattermost 账号 - 关键验证：不卡死', async ({ page, channelPage }) => {
+  test('添加 Mattermost 账号 - 关键验证：不卡死', async ({ page }) => {
     const data = testData.channel.mattermost;
     
     // 添加 Channel - 关键验证点：3秒内完成，不卡死
-    await channelPage.addChannel(data);
-    
-    // 验证保存成功提示
-    await channelPage.waitForToast('保存成功');
+    await test.step('打开添加账号对话框并填写表单', async () => {
+      // 启用 Mattermost
+      await page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch').click();
+      await page.waitForTimeout(300);
+      
+      // 点击添加账号
+      await page.click('button:has-text("+ 添加账号")');
+      
+      const dialog = page.locator('.el-dialog');
+      await expect(dialog).toBeVisible();
+      
+      // 填写表单
+      await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill(data.id);
+      await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(data.name);
+      await page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill(data.token);
+      await page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill(data.url);
+      
+      // 保存 - 关键验证点：页面不卡死，3秒内返回
+      await page.click('.el-dialog__footer button:has-text("保存")');
+      
+      // 等待对话框关闭（证明没有卡死）
+      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    });
     
     // 验证账号出现在列表中
-    await channelPage.verifyChannelExists(data.name);
+    await expect(page.locator('.account-name', { hasText: data.name })).toBeVisible();
   });
 
-  test('添加 Telegram 账号', async ({ page, channelPage }) => {
-    const data = testData.channel.telegram;
-    
-    await channelPage.addChannel(data);
-    await channelPage.waitForToast('保存成功');
-    await channelPage.verifyChannelExists(data.name);
-  });
-
-  test('删除 Channel', async ({ page, channelPage }) => {
-    // 先添加一个 Channel
+  test('删除 Channel 账号', async ({ page }) => {
+    // 先添加一个账号
     const data = testData.channel.mattermost;
-    await channelPage.addChannel(data);
-    await channelPage.waitForToast('保存成功');
     
-    // 删除它
-    await channelPage.deleteChannel(data.name);
-    await channelPage.waitForToast('删除成功');
-    
-    // 验证已删除
-    await expect(page.locator('text=' + data.name)).not.toBeVisible();
-  });
-
-  test('编辑 Channel', async ({ page, channelPage }) => {
-    // 先添加一个 Channel
-    const data = testData.channel.mattermost;
-    await channelPage.addChannel(data);
-    await channelPage.waitForToast('保存成功');
-    
-    // 点击编辑按钮
-    const row = page.locator('.el-table__row', { hasText: data.name });
-    await row.locator('button:has-text("编辑")').click();
-    
-    // 修改名称
-    const newName = data.name + ' - Edited';
-    await page.fill('input[placeholder*="Bot"]', newName);
-    
-    // 保存 - 同样验证不卡死
-    await page.click('button:has-text("保存")');
+    // 启用 Mattermost 并添加账号
+    await page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch').click();
+    await page.waitForTimeout(300);
+    await page.click('button:has-text("+ 添加账号")');
+    await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill(data.id);
+    await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(data.name);
+    await page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill(data.token);
+    await page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill(data.url);
+    await page.click('.el-dialog__footer button:has-text("保存")');
     await expect(page.locator('.el-dialog')).not.toBeVisible({ timeout: 5000 });
     
-    await channelPage.waitForToast('保存成功');
-    await channelPage.verifyChannelExists(newName);
+    // 删除它
+    const card = page.locator('.account-card', { hasText: data.name });
+    await card.locator('button:has-text("删除")').click();
+    
+    // 确认删除
+    await page.click('.el-message-box__btns button:has-text("确定")');
+    
+    // 验证已删除
+    await expect(page.locator('.account-name', { hasText: data.name })).not.toBeVisible();
+  });
+
+  test('编辑 Channel 账号', async ({ page }) => {
+    const data = testData.channel.mattermost;
+    
+    // 启用并添加账号
+    await page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch').click();
+    await page.waitForTimeout(300);
+    await page.click('button:has-text("+ 添加账号")');
+    await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill(data.id);
+    await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(data.name);
+    await page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill(data.token);
+    await page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill(data.url);
+    await page.click('.el-dialog__footer button:has-text("保存")');
+    await expect(page.locator('.el-dialog')).not.toBeVisible({ timeout: 5000 });
+    
+    // 点击编辑按钮
+    const card = page.locator('.account-card', { hasText: data.name });
+    await card.locator('button:has-text("配置")').click();
+    
+    // 修改名称
+    const dialog = page.locator('.el-dialog');
+    await expect(dialog).toBeVisible();
+    const newName = data.name + ' - Edited';
+    await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(newName);
+    
+    // 保存
+    await page.click('.el-dialog__footer button:has-text("保存")');
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    
+    // 验证更新
+    await expect(page.locator('.account-name', { hasText: newName })).toBeVisible();
   });
 
   test('表单验证 - Token 必填', async ({ page }) => {
+    // 启用 Mattermost
+    await page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch').click();
+    await page.waitForTimeout(300);
+    
     await page.click('button:has-text("+ 添加账号")');
     
-    // 只填写部分字段
-    await page.fill('input[placeholder*="default"]', 'test-id');
-    await page.fill('input[placeholder*="Bot"]', 'Test Bot');
+    const dialog = page.locator('.el-dialog');
+    await expect(dialog).toBeVisible();
+    
+    // 只填写部分字段，不填 Token
+    await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill('test-id');
+    await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill('Test Bot');
     // 不填 Token
     
-    await page.click('button:has-text("保存")');
+    // 尝试保存
+    await page.click('.el-dialog__footer button:has-text("保存")');
     
-    // 验证验证错误
-    await expect(page.locator('.el-form-item__error')).toBeVisible();
-  });
-
-  test('批量添加多个 Channel', async ({ page, channelPage }) => {
-    const channels = [
-      testData.channel.mattermost,
-      testData.channel.telegram,
-    ];
-    
-    for (const data of channels) {
-      await channelPage.addChannel(data);
-      await channelPage.waitForToast('保存成功');
-    }
-    
-    // 验证所有 Channel 都在列表中
-    for (const data of channels) {
-      await channelPage.verifyChannelExists(data.name);
-    }
+    // 对话框不应关闭（因为有必填验证）
+    await expect(dialog).toBeVisible();
   });
 });

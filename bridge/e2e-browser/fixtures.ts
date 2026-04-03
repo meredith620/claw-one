@@ -9,16 +9,12 @@ import { test as base, expect, Page } from '@playwright/test';
 export const testData = {
   provider: {
     openai: {
-      id: `test-openai-${Date.now()}`,
-      name: 'Test OpenAI Provider',
+      name: 'test-openai',
       apiKey: 'sk-test-key-12345',
-      baseUrl: 'https://api.openai.com/v1',
     },
     anthropic: {
-      id: `test-claude-${Date.now()}`,
-      name: 'Test Claude Provider',
+      name: 'test-claude',
       apiKey: 'sk-ant-test-key',
-      baseUrl: 'https://api.anthropic.com',
     },
   },
   channel: {
@@ -28,79 +24,73 @@ export const testData = {
       token: 'test-token-12345',
       url: 'https://mm.example.com',
     },
-    telegram: {
-      id: `test-tg-${Date.now()}`,
-      name: 'Test Telegram Bot',
-      token: '123456789:test-token',
-      url: '',
-    },
   },
   agent: {
     testAgent: {
       id: `test-agent-${Date.now()}`,
       name: 'Test Agent',
-      provider: 'openai',
-      model: 'gpt-4',
-      systemPrompt: 'You are a helpful assistant.',
-    },
-  },
-  memory: {
-    testMemory: {
-      id: `test-memory-${Date.now()}`,
-      name: 'Test Memory Store',
-      type: 'file',
-      path: '/tmp/test-memory',
+      workspace: '',
+      agentDir: '',
     },
   },
 };
 
 // 页面操作封装
 export class ConfigPage {
-  constructor(private page: Page) {}
+  constructor(protected page: Page) {}
 
   async goto() {
     await this.page.goto('/config');
     await this.page.waitForLoadState('networkidle');
   }
 
-  async waitForToast(message: string) {
-    await expect(this.page.locator('.el-message')).toContainText(message);
+  async waitForToast(message: string, timeout = 5000) {
+    await expect(this.page.locator('.el-message').last()).toContainText(message, { timeout });
   }
 
-  async clickTab(tabName: string) {
-    await this.page.locator('.el-tabs__item', { hasText: tabName }).click();
-    await this.page.waitForTimeout(300); // 等待 Tab 切换动画
+  async navigateTo(module: string) {
+    // 使用侧边栏导航
+    await this.page.locator('.menu-item', { hasText: module }).click();
+    await this.page.waitForTimeout(500);
   }
 }
 
 // Provider 配置页
 export class ProviderPage extends ConfigPage {
   async goto() {
-    await super.goto();
-    await this.clickTab('Provider');
+    await this.page.goto('/config/provider');
+    await this.page.waitForLoadState('networkidle');
   }
 
-  async addProvider(data: typeof testData.provider.openai) {
-    await this.page.click('button:has-text("添加 Provider")');
+  async addProvider(data: typeof testData.provider.openai, type = 'openai') {
+    // 点击添加实例按钮
+    await this.page.click('button:has-text("+ 添加实例")');
     
     const dialog = this.page.locator('.el-dialog');
     await expect(dialog).toBeVisible();
     
-    await this.page.fill('input[placeholder*="ID"]', data.id);
-    await this.page.fill('input[placeholder*="名称"]', data.name);
-    await this.page.fill('input[type="password"]', data.apiKey);
-    await this.page.fill('input[placeholder*="URL"]', data.baseUrl);
+    // 填写实例名称
+    await this.page.locator('.el-dialog .el-form-item').first().locator('input').fill(data.name);
     
+    // 填写 API Key (password 类型)
+    await this.page.locator('.el-dialog input[type="password"]').fill(data.apiKey);
+    
+    // 点击保存
     await this.page.click('.el-dialog__footer button:has-text("保存")');
+    
+    // 等待对话框关闭
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
   }
 
   async verifyProviderExists(name: string) {
-    await expect(this.page.locator('text=' + name).first()).toBeVisible();
+    await expect(this.page.locator('.instance-id', { hasText: name }).first()).toBeVisible();
   }
 
   async deleteProvider(name: string) {
-    const row = this.page.locator('.el-table__row', { hasText: name });
-    await row.locator('button:has-text("删除")').click();
+    const card = this.page.locator('.instance-card', { hasText: name });
+    await card.locator('button:has-text("删除")').click();
+    
+    // 确认删除对话框
     await this.page.click('.el-message-box__btns button:has-text("确定")');
   }
 }
@@ -108,100 +98,132 @@ export class ProviderPage extends ConfigPage {
 // Channel 配置页
 export class ChannelPage extends ConfigPage {
   async goto() {
-    await super.goto();
-    await this.clickTab('Channel');
+    await this.page.goto('/config/channel');
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  async enableMattermost() {
+    // 先启用 Mattermost 开关
+    const switch_ = this.page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch');
+    const isChecked = await switch_.locator('input').isChecked();
+    if (!isChecked) {
+      await switch_.click();
+      await this.page.waitForTimeout(300);
+    }
   }
 
   async addChannel(data: typeof testData.channel.mattermost) {
+    // 确保 Mattermost 已启用
+    await this.enableMattermost();
+    
     // 点击添加账号按钮
     await this.page.click('button:has-text("+ 添加账号")');
-    
-    // 填写表单
-    await this.page.fill('input[placeholder*="default"]', data.id);
-    await this.page.fill('input[placeholder*="Bot"]', data.name);
-    await this.page.fill('input[type="password"]', data.token);
-    await this.page.fill('input[placeholder*="https"]', data.url);
-    
-    // 保存 - 关键验证点：页面不卡死，3秒内返回
-    const saveButton = this.page.locator('button:has-text("保存")');
-    await saveButton.click();
-    
-    // 等待对话框关闭（证明没有卡死）
-    await expect(this.page.locator('.el-dialog')).not.toBeVisible({ timeout: 5000 });
-  }
-
-  async verifyChannelExists(name: string) {
-    await expect(this.page.locator('text=' + name).first()).toBeVisible();
-  }
-
-  async deleteChannel(name: string) {
-    const row = this.page.locator('.el-table__row', { hasText: name });
-    await row.locator('button:has-text("删除")').click();
-    await this.page.click('.el-message-box__btns button:has-text("确定")');
-  }
-}
-
-// Agent 配置页
-export class AgentPage extends ConfigPage {
-  async goto() {
-    await super.goto();
-    await this.clickTab('Agent');
-  }
-
-  async addAgent(data: typeof testData.agent.testAgent) {
-    await this.page.click('button:has-text("添加 Agent")');
     
     const dialog = this.page.locator('.el-dialog');
     await expect(dialog).toBeVisible();
     
-    await this.page.fill('input[placeholder*="ID"]', data.id);
-    await this.page.fill('input[placeholder*="名称"]', data.name);
+    // 填写表单 - 使用 label 定位
+    await this.page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill(data.id);
+    await this.page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(data.name);
+    await this.page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill(data.token);
+    await this.page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill(data.url);
     
-    // 选择 Provider
-    await this.page.click('.el-select');
-    await this.page.click(`.el-select-dropdown__item:has-text("${data.provider}")`);
+    // 保存 - 关键验证点：页面不卡死，3秒内返回
+    await this.page.click('.el-dialog__footer button:has-text("保存")');
     
-    // 填写模型
-    await this.page.fill('input[placeholder*="模型"]', data.model);
+    // 等待对话框关闭（证明没有卡死）
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
+  }
+
+  async verifyChannelExists(name: string) {
+    await expect(this.page.locator('.account-name', { hasText: name }).first()).toBeVisible();
+  }
+
+  async deleteChannel(name: string) {
+    const card = this.page.locator('.account-card', { hasText: name });
+    await card.locator('button:has-text("删除")').click();
     
-    // 填写系统提示词
-    await this.page.fill('textarea', data.systemPrompt);
+    // 确认删除对话框
+    await this.page.click('.el-message-box__btns button:has-text("确定")');
+  }
+}
+
+// Agent 配置页 (Multi-Agent 模式)
+export class AgentPage extends ConfigPage {
+  async goto() {
+    await this.page.goto('/config/agent');
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  async switchToMultiAgentMode() {
+    // 切换到 Multi-Agent 模式
+    await this.page.locator('.el-radio-button', { hasText: 'Multi-Agent 模式' }).click();
+    await this.page.waitForTimeout(300);
+  }
+
+  async addAgent(data: typeof testData.agent.testAgent) {
+    // 确保在 Multi-Agent 模式
+    await this.switchToMultiAgentMode();
+    
+    await this.page.click('button:has-text("+ 添加 Agent")');
+    
+    const dialog = this.page.locator('.el-dialog');
+    await expect(dialog).toBeVisible();
+    
+    // 填写 Agent ID
+    await this.page.locator('.el-form-item', { hasText: 'Agent ID' }).locator('input').fill(data.id);
+    
+    // 填写显示名称
+    await this.page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(data.name);
     
     await this.page.click('.el-dialog__footer button:has-text("保存")');
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
   }
 
   async verifyAgentExists(name: string) {
-    await expect(this.page.locator('text=' + name).first()).toBeVisible();
+    await expect(this.page.locator('.agent-name', { hasText: name }).first()).toBeVisible();
+  }
+
+  async deleteAgent(name: string) {
+    const card = this.page.locator('.agent-card', { hasText: name });
+    await card.locator('button:has-text("删除")').click();
+    await this.page.click('.el-message-box__btns button:has-text("确定")');
+  }
+
+  async saveAgentConfig() {
+    await this.page.click('button:has-text("保存 Agent 配置")');
+    await this.waitForToast('保存成功');
   }
 }
 
 // Memory 配置页
 export class MemoryPage extends ConfigPage {
   async goto() {
-    await super.goto();
-    await this.clickTab('Memory');
+    await this.page.goto('/config/memory');
+    await this.page.waitForLoadState('networkidle');
   }
 
-  async addMemory(data: typeof testData.memory.testMemory) {
-    await this.page.click('button:has-text("添加 Memory")');
-    
-    const dialog = this.page.locator('.el-dialog');
-    await expect(dialog).toBeVisible();
-    
-    await this.page.fill('input[placeholder*="ID"]', data.id);
-    await this.page.fill('input[placeholder*="名称"]', data.name);
-    
-    // 选择类型
-    await this.page.click('.el-select');
-    await this.page.click(`.el-select-dropdown__item:has-text("${data.type}")`);
-    
-    await this.page.fill('input[placeholder*="路径"]', data.path);
-    
-    await this.page.click('.el-dialog__footer button:has-text("保存")');
+  async enableMemory() {
+    const switch_ = this.page.locator('.el-form-item', { hasText: '启用 Memory' }).locator('.el-switch');
+    const isChecked = await switch_.locator('input').isChecked();
+    if (!isChecked) {
+      await switch_.click();
+      await this.page.waitForTimeout(300);
+    }
   }
 
-  async verifyMemoryExists(name: string) {
-    await expect(this.page.locator('text=' + name).first()).toBeVisible();
+  async configureOllama(baseUrl = 'http://localhost:11434') {
+    // 选择 Ollama Provider
+    await this.page.locator('.el-radio-button', { hasText: 'Ollama' }).click();
+    await this.page.waitForTimeout(300);
+    
+    // 填写 Base URL
+    await this.page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill(baseUrl);
+  }
+
+  async saveMemoryConfig() {
+    await this.page.click('button:has-text("保存 Memory 配置")');
+    await this.waitForToast('保存成功');
   }
 }
 
