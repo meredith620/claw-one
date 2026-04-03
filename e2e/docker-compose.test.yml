@@ -37,6 +37,24 @@ services:
       openclaw:
         condition: service_healthy
 
+  playwright:
+    build:
+      context: ..
+      dockerfile: e2e/Dockerfile.playwright
+    container_name: claw-one-test-playwright
+    environment:
+      - CLAW_ONE_URL=http://claw-one-test-app:8080
+      - CI=true
+    networks:
+      - claw-one-test-net
+    depends_on:
+      claw-one:
+        condition: service_started
+    # 可以选择将测试报告复制到主机
+    volumes:
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+
 volumes:
   openclaw-config:
   claw-one-data:

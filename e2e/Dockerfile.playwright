@@ -1,0 +1,21 @@
+# Playwright 浏览器 E2E 测试容器
+# 基于官方 Playwright 镜像，包含 Chromium/Firefox/WebKit
+
+FROM mcr.microsoft.com/playwright:v1.59.1-noble
+
+WORKDIR /app
+
+# 复制测试文件
+COPY bridge/package*.json ./
+COPY bridge/playwright.config.ts ./
+COPY bridge/e2e-browser ./e2e-browser
+
+# 安装 Node 依赖
+RUN npm ci
+
+# 设置环境变量
+ENV CLAW_ONE_URL=http://claw-one-test-app:8080
+ENV CI=true
+
+# 默认命令：运行所有测试
+CMD ["npx", "playwright", "test", "--reporter=list"]
