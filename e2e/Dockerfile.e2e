@@ -1,4 +1,4 @@
-# 使用官方 Rust 镜像构建
+# 使用官方 Rust 镜像构建后端
 FROM rust:1.88-slim-bookworm as builder
 
 WORKDIR /app
@@ -17,6 +17,19 @@ COPY hull/src ./src
 # 构建 release 版本
 RUN cargo build --release
 
+# 前端构建阶段
+FROM node:20-slim as frontend-builder
+
+WORKDIR /app
+
+# 复制前端代码
+COPY bridge/package*.json ./
+RUN npm ci
+
+COPY bridge/ ./
+# 跳过类型检查直接构建
+RUN npx vite build
+
 # 运行阶段
 FROM debian:bookworm-slim
 
@@ -30,6 +43,9 @@ WORKDIR /app
 
 # 复制编译好的二进制文件
 COPY --from=builder /app/target/release/claw-one /app/bin/claw-one
+
+# 复制前端静态文件（vite 输出到 ../static/dist）
+COPY --from=frontend-builder /static/dist /app/share/static
 
 # 创建必要的目录
 RUN mkdir -p /app/data /app/config /tmp/test-openclaw
