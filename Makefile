@@ -28,6 +28,15 @@ help:
 	@echo "  make test        - 运行测试"
 	@echo "  make clean       - 清理构建产物"
 	@echo ""
+	@echo "测试命令:"
+	@echo "  make test-fast   - 快速测试 (Layer 1+2, ~30秒)"
+	@echo "  make test-e2e    - Docker E2E 测试 (Layer 3, ~2-3分钟)"
+	@echo "  make test-browser - Browser E2E 测试 (Layer 4, ~1-2分钟)"
+	@echo "  make test-all    - 全量测试 (Layer 1+2+3)"
+	@echo "  make test-full   - 完整测试 (Layer 1+2+3+4)"
+	@echo "  make test-env-down - 停止测试环境"
+	@echo "  make test-env-status - 查看测试环境状态"
+	@echo ""
 	@echo "分发构建命令 (两阶段 Docker 构建):"
 	@echo "  make dist        - 完整构建 (检查/构建镜像 + 编译应用)"
 	@echo "  make builder     - 阶段1: 构建编译环境镜像"
@@ -121,6 +130,23 @@ test-e2e:
 	@echo ""
 	@echo "✅ E2E 测试完成!"
 
+# Browser E2E 测试: Layer 4 (Playwright 前端交互测试)
+# 约 1-2 分钟，在独立容器中运行
+test-browser:
+	@echo "🎭 运行 Browser E2E 测试 (Layer 4 - Playwright)..."
+	@echo ""
+	@echo "启动测试环境..."
+	@cd e2e && docker compose -f docker-compose.test.yml up -d openclaw claw-one
+	@echo ""
+	@echo "等待服务就绪..."
+	@sleep 5
+	@echo ""
+	@echo "构建并运行 Playwright 测试..."
+	@cd e2e && docker compose -f docker-compose.test.yml build playwright
+	@cd e2e && docker compose -f docker-compose.test.yml run --rm playwright
+	@echo ""
+	@echo "✅ Browser E2E 测试完成!"
+
 # 停止 E2E 测试环境
 test-env-down:
 	@echo "🛑 停止 E2E 测试环境..."
@@ -135,6 +161,11 @@ test-env-reset:
 test-all: test-fast
 	@echo ""
 	@make test-e2e
+
+# 完整测试: Layer 1 + 2 + 3 + 4
+test-full: test-fast test-e2e test-browser
+	@echo ""
+	@echo "✅ 全部测试完成!"
 
 # 查看 E2E 环境状态
 test-env-status:

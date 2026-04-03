@@ -28,3 +28,9 @@ claw-one-*.sh
 # OS
 .DS_Store
 Thumbs.db
+
+# Playwright test results
+/playwright-report/
+/test-results/
+/playwright/.cache/
+
