@@ -98,14 +98,12 @@ impl StateManager {
                     can_rollback,
                 })
             }
-            AppState::ApplyingConfig { target_commit, .. } => {
-                Ok(StateResponse {
-                    state: OpenClawState::Starting,
-                    current_version: Some(target_commit),
-                    last_error: None,
-                    can_rollback,
-                })
-            }
+            AppState::ApplyingConfig { target_commit, .. } => Ok(StateResponse {
+                state: OpenClawState::Starting,
+                current_version: Some(target_commit),
+                last_error: None,
+                can_rollback,
+            }),
             AppState::SafeMode {
                 error_type,
                 ref message,
@@ -133,7 +131,7 @@ impl StateManager {
     }
 
     /// 事务性配置应用
-    /// 
+    ///
     /// 流程：
     /// 1. 保存配置并创建 Git 提交
     /// 2. 设置状态为 ApplyingConfig
@@ -169,7 +167,8 @@ impl StateManager {
                 format!("Failed to restart service: {}", e),
                 false,
                 current_version,
-            ).await;
+            )
+            .await;
             return Err(e);
         }
 
@@ -207,7 +206,7 @@ impl StateManager {
     /// 从 SafeMode 恢复
     pub async fn recover_from_safe_mode(&self) -> Result<()> {
         let current_state = self.get_state().await;
-        
+
         if !matches!(current_state, AppState::SafeMode { .. }) {
             return Err(AppError::Runtime("Not in SafeMode".to_string()));
         }
@@ -221,7 +220,9 @@ impl StateManager {
             *state = AppState::Normal;
             Ok(())
         } else {
-            Err(AppError::Runtime("Service still unhealthy after recovery attempt".to_string()))
+            Err(AppError::Runtime(
+                "Service still unhealthy after recovery attempt".to_string(),
+            ))
         }
     }
 
@@ -236,19 +237,21 @@ impl StateManager {
         } else {
             // 重启后不健康，进入 SafeMode
             let logs = self.runtime_manager.get_logs(50).await?;
-            let error_type = RuntimeManager::classify_error(&logs)
-                .unwrap_or(ErrorType::System);
-            
+            let error_type = RuntimeManager::classify_error(&logs).unwrap_or(ErrorType::System);
+
             let last_known_good = self.get_current_version().await.ok();
-            
+
             self.enter_safe_mode(
                 error_type,
                 "Service failed to start after restart".to_string(),
                 false,
                 last_known_good,
-            ).await;
-            
-            Err(AppError::Runtime("Service failed to start after restart".to_string()))
+            )
+            .await;
+
+            Err(AppError::Runtime(
+                "Service failed to start after restart".to_string(),
+            ))
         }
     }
 
@@ -258,8 +261,10 @@ impl StateManager {
         // 1. 加载 factory-config.json
         // 2. 应用配置
         // 3. 重启服务
-        
-        Err(AppError::Runtime("Factory reset not implemented yet".to_string()))
+
+        Err(AppError::Runtime(
+            "Factory reset not implemented yet".to_string(),
+        ))
     }
 
     // 私有辅助方法
@@ -269,7 +274,7 @@ impl StateManager {
         if let Some(git_hash) = option_env!("GIT_COMMIT_HASH") {
             return Ok(git_hash.to_string());
         }
-        
+
         // 回退：从配置 Git 仓库获取最新 commit
         let snapshots = self.config_manager.list_snapshots().await?;
         snapshots
@@ -278,16 +283,12 @@ impl StateManager {
             .ok_or_else(|| AppError::Git("No commits found".to_string()))
     }
 
-    async fn handle_health_check_failure(
-        &self,
-        last_known_good: Option<String>,
-    ) -> Result<()> {
+    async fn handle_health_check_failure(&self, last_known_good: Option<String>) -> Result<()> {
         // 1. 获取服务日志
         let logs = self.runtime_manager.get_logs(50).await?;
 
         // 2. 从日志分类错误
-        let error_type = RuntimeManager::classify_error(&logs)
-            .unwrap_or(ErrorType::System);
+        let error_type = RuntimeManager::classify_error(&logs).unwrap_or(ErrorType::System);
 
         match error_type {
             ErrorType::Config => {
@@ -297,7 +298,7 @@ impl StateManager {
                         Ok(_) => {
                             // 回滚成功，重启服务
                             let _ = self.runtime_manager.restart().await;
-                            
+
                             // 进入 SafeMode，标记已回滚
                             self.enter_safe_mode(
                                 ErrorType::Config,
@@ -310,20 +311,26 @@ impl StateManager {
                             // 回滚失败，进入 SafeMode
                             self.enter_safe_mode(
                                 ErrorType::Config,
-                                format!("Configuration error detected. Auto-rollback failed: {}", e),
+                                format!(
+                                    "Configuration error detected. Auto-rollback failed: {}",
+                                    e
+                                ),
                                 false,
                                 last_known_good,
-                            ).await;
+                            )
+                            .await;
                         }
                     }
                 } else {
                     // 没有历史版本，无法回滚
                     self.enter_safe_mode(
                         ErrorType::Config,
-                        "Configuration error detected. No previous version available for rollback.".to_string(),
+                        "Configuration error detected. No previous version available for rollback."
+                            .to_string(),
                         false,
                         None,
-                    ).await;
+                    )
+                    .await;
                 }
             }
             ErrorType::System => {

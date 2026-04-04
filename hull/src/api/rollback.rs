@@ -1,11 +1,7 @@
 use axum::{extract::Extension, Json};
 use std::sync::Arc;
 
-use crate::{
-    config::ConfigManager,
-    error::Result,
-    types::RollbackRequest,
-};
+use crate::{config::ConfigManager, error::Result, types::RollbackRequest};
 
 pub async fn handler(
     Extension(config_manager): Extension<Arc<ConfigManager>>,

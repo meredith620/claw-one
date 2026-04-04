@@ -1,16 +1,11 @@
 use clap::{Parser, Subcommand};
+use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::fs;
 use tracing::info;
 
-use claw_one::{
-    build_api_router,
-    ConfigManager,
-    Settings,
-    StateManager,
-};
+use claw_one::{build_api_router, ConfigManager, Settings, StateManager};
 
 /// Claw One - OpenClaw 配置守护程序
 #[derive(Parser)]
@@ -113,11 +108,8 @@ async fn run_server() {
     };
 
     // 初始化日志
-    let log_filter = format!(
-        "claw_one={},tower_http=debug",
-        settings.server.log_level
-    );
-    
+    let log_filter = format!("claw_one={},tower_http=debug", settings.server.log_level);
+
     // 检查是否需要写入日志文件（通过环境变量 CLAW_ONE_LOG_DIR 设置）
     if let Ok(log_dir) = std::env::var("CLAW_ONE_LOG_DIR") {
         // 生产模式：写入日志文件，按天滚动，保留7天
@@ -125,7 +117,7 @@ async fn run_server() {
         if !log_dir_path.exists() {
             std::fs::create_dir_all(&log_dir_path).ok();
         }
-        
+
         // 创建非阻塞写入器，按天滚动，保留7天
         let file_appender = tracing_appender::rolling::Builder::new()
             .rotation(tracing_appender::rolling::Rotation::DAILY)
@@ -134,28 +126,29 @@ async fn run_server() {
             .max_log_files(7)
             .build(&log_dir_path)
             .expect("Failed to create log appender");
-        
+
         let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-        
+
         tracing_subscriber::fmt()
             .with_env_filter(log_filter)
             .with_writer(non_blocking)
-            .with_ansi(false)  // 文件日志不需要 ANSI 颜色
+            .with_ansi(false) // 文件日志不需要 ANSI 颜色
             .init();
-        
+
         // 保持 guard 存活，防止日志丢失
         std::mem::forget(_guard);
-        
+
         info!("Logging to directory: {}", log_dir);
     } else {
         // 开发模式：输出到标准输出（前台运行）
-        tracing_subscriber::fmt()
-            .with_env_filter(log_filter)
-            .init();
+        tracing_subscriber::fmt().with_env_filter(log_filter).init();
     }
 
     info!("Starting Claw One backend v{}", env!("CARGO_PKG_VERSION"));
-    info!("Configuration: {:?}", std::env::var("CLAW_ONE_CONFIG").unwrap_or_else(|_| "default".to_string()));
+    info!(
+        "Configuration: {:?}",
+        std::env::var("CLAW_ONE_CONFIG").unwrap_or_else(|_| "default".to_string())
+    );
     info!("Server: {}:{}", settings.server.host, settings.server.port);
     info!("OpenClaw service: {}", settings.openclaw.service_name);
 
@@ -167,7 +160,7 @@ async fn run_server() {
 
     // 初始化配置管理器
     let config_manager = std::sync::Arc::new(ConfigManager::new());
-    
+
     // 自动迁移旧版 Git 仓库（如果存在）
     match config_manager.migrate_legacy_git_repo().await {
         Ok(true) => {
@@ -181,9 +174,12 @@ async fn run_server() {
             // 继续启动，不阻塞
         }
     }
-    
+
     // 初始化状态管理器
-    let state_manager = std::sync::Arc::new(StateManager::new(config_manager.clone(), &settings.openclaw));
+    let state_manager = std::sync::Arc::new(StateManager::new(
+        config_manager.clone(),
+        &settings.openclaw,
+    ));
 
     // 获取静态文件目录
     let static_dir = settings.static_dir();
@@ -198,19 +194,25 @@ async fn run_server() {
     // 构建路由
     let static_service = tower_http::services::ServeDir::new(&static_dir)
         .append_index_html_on_directories(true)
-        .fallback(tower_http::services::ServeFile::new(static_dir.join("index.html")));
-    
+        .fallback(tower_http::services::ServeFile::new(
+            static_dir.join("index.html"),
+        ));
+
     // 使用 lib 中的 build_api_router 构建 API 路由
     let api_router = build_api_router(config_manager, state_manager);
-    
+
     // 添加静态文件服务和日志中间件
     let app = api_router
         .fallback_service(static_service)
         .layer(axum::middleware::from_fn(logging_middleware));
 
     let addr = SocketAddr::from((
-        settings.server.host.parse::<std::net::IpAddr>().expect("Invalid host"),
-        settings.server.port
+        settings
+            .server
+            .host
+            .parse::<std::net::IpAddr>()
+            .expect("Invalid host"),
+        settings.server.port,
     ));
     info!("Listening on http://{}", addr);
 
@@ -255,18 +257,18 @@ async fn start_daemon_mode(exe_path: &std::path::Path) {
     let log_dir = dirs::home_dir()
         .map(|h| h.join("claw-one/logs"))
         .unwrap_or_else(|| PathBuf::from("/tmp/claw-one-logs"));
-    
+
     fs::create_dir_all(&log_dir).ok();
-    
+
     let _child = Command::new("nohup")
         .arg(exe_path)
         .arg("run")
         .env("CLAW_ONE_LOG_DIR", &log_dir)
-        .stdout(Stdio::null())  // 日志通过 tracing 写入文件
-        .stderr(Stdio::null())  // 不再重定向到单个文件，由 tracing-appender 管理
+        .stdout(Stdio::null()) // 日志通过 tracing 写入文件
+        .stderr(Stdio::null()) // 不再重定向到单个文件，由 tracing-appender 管理
         .spawn()
         .expect("Failed to start daemon");
-    
+
     println!("✅ Claw One 已在后台启动");
     println!("   日志目录: {}", log_dir.display());
     println!("   日志滚动: 按天滚动，保留最近7天");
@@ -275,14 +277,14 @@ async fn start_daemon_mode(exe_path: &std::path::Path) {
 /// 停止服务
 async fn stop_service() {
     println!("🛑 正在停止 Claw One...");
-    
+
     // 先尝试停止 systemd 服务
     let systemd_result = Command::new("systemctl")
         .args(["--user", "stop", "claw-one"])
         .output();
 
     let systemd_ok = systemd_result.is_ok() && systemd_result.unwrap().status.success();
-    
+
     if systemd_ok {
         // 给 systemd 一些时间停止
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -293,11 +295,9 @@ async fn stop_service() {
     let pids = get_claw_one_pids().await;
     if !pids.is_empty() {
         for pid in &pids {
-            let _ = Command::new("kill")
-                .args(["-TERM", pid])
-                .output();
+            let _ = Command::new("kill").args(["-TERM", pid]).output();
         }
-        
+
         // 等待进程退出
         for i in 0..10 {
             tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
@@ -306,24 +306,25 @@ async fn stop_service() {
                 println!("✅ Claw One 已停止");
                 return;
             }
-            
+
             // 超过 5 次尝试后强制终止
             if i >= 5 {
                 for pid in &remaining {
-                    let _ = Command::new("kill")
-                        .args(["-KILL", pid])
-                        .output();
+                    let _ = Command::new("kill").args(["-KILL", pid]).output();
                 }
             }
         }
     }
-    
+
     // 最终检查
     let final_pids = get_claw_one_pids().await;
     if final_pids.is_empty() {
         println!("✅ Claw One 已停止");
     } else {
-        println!("⚠️  警告：Claw One 进程可能仍在运行 (PIDs: {:?})", final_pids);
+        println!(
+            "⚠️  警告：Claw One 进程可能仍在运行 (PIDs: {:?})",
+            final_pids
+        );
     }
 }
 
@@ -331,12 +332,10 @@ async fn stop_service() {
 async fn get_claw_one_pids() -> Vec<String> {
     let current_pid = std::process::id();
     let mut pids = Vec::new();
-    
+
     // 使用 pidof 获取所有 claw-one 进程
-    let output = Command::new("pidof")
-        .arg("claw-one")
-        .output();
-    
+    let output = Command::new("pidof").arg("claw-one").output();
+
     if let Ok(o) = output {
         if o.status.success() {
             let output_str = String::from_utf8_lossy(&o.stdout);
@@ -357,17 +356,17 @@ async fn get_claw_one_pids() -> Vec<String> {
             }
         }
     }
-    
+
     pids
 }
 
 /// 重启服务
 async fn restart_service() {
     println!("🔄 重启 Claw One...");
-    
+
     // 确保完全停止
     stop_service().await;
-    
+
     // 等待确保进程完全退出
     for _ in 0..5 {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
@@ -376,7 +375,7 @@ async fn restart_service() {
             break;
         }
     }
-    
+
     // 启动服务
     start_service(false).await;
 }
@@ -386,10 +385,10 @@ async fn show_status() {
     // 获取版本信息
     let version = env!("CARGO_PKG_VERSION");
     let git_hash = option_env!("GIT_COMMIT_HASH").unwrap_or("unknown");
-    
+
     println!("🐾 Claw One v{} ({})", version, git_hash);
     println!();
-    
+
     // 检查进程是否在运行（使用精确匹配）
     let output = Command::new("pgrep")
         .args(["-f", "claw-one (run|start)$"])
@@ -426,15 +425,25 @@ async fn show_status() {
     }
 
     println!("Systemd 状态: {}", systemd_status);
-    println!("开机自启: {}", if enabled { "✅ 已启用" } else { "❌ 未启用" });
+    println!(
+        "开机自启: {}",
+        if enabled {
+            "✅ 已启用"
+        } else {
+            "❌ 未启用"
+        }
+    );
 
     // 检查配置文件
-    let config_path = std::env::var("CLAW_ONE_CONFIG")
-        .unwrap_or_else(|_| {
-            dirs::home_dir()
-                .map(|h| h.join("claw-one/config/claw-one.toml").to_string_lossy().to_string())
-                .unwrap_or_else(|| "~/.claw-one/config/claw-one.toml".to_string())
-        });
+    let config_path = std::env::var("CLAW_ONE_CONFIG").unwrap_or_else(|_| {
+        dirs::home_dir()
+            .map(|h| {
+                h.join("claw-one/config/claw-one.toml")
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .unwrap_or_else(|| "~/.claw-one/config/claw-one.toml".to_string())
+    });
 
     println!("配置文件: {}", config_path);
 
@@ -524,7 +533,10 @@ fn show_config() {
     println!("========================================");
     println!();
     println!("[服务器]");
-    println!("  监听地址: {}:{}", settings.server.host, settings.server.port);
+    println!(
+        "  监听地址: {}:{}",
+        settings.server.host, settings.server.port
+    );
     println!("  日志级别: {}", settings.server.log_level);
     println!();
     println!("[OpenClaw]");
@@ -538,8 +550,22 @@ fn show_config() {
     println!("  静态文件: {}", settings.static_dir().display());
     println!();
     println!("[功能]");
-    println!("  自动备份: {}", if settings.features.auto_backup { "开启" } else { "关闭" });
-    println!("  安全模式: {}", if settings.features.safe_mode { "开启" } else { "关闭" });
+    println!(
+        "  自动备份: {}",
+        if settings.features.auto_backup {
+            "开启"
+        } else {
+            "关闭"
+        }
+    );
+    println!(
+        "  安全模式: {}",
+        if settings.features.safe_mode {
+            "开启"
+        } else {
+            "关闭"
+        }
+    );
     println!();
 }
 
@@ -547,12 +573,10 @@ fn show_config() {
 async fn is_running() -> bool {
     // 获取当前进程 PID，排除自身
     let current_pid = std::process::id();
-    
+
     // 使用 pidof 获取所有 claw-one 进程，然后检查 cmdline
-    let output = Command::new("pidof")
-        .arg("claw-one")
-        .output();
-    
+    let output = Command::new("pidof").arg("claw-one").output();
+
     match output {
         Ok(o) if o.status.success() => {
             let pids = String::from_utf8_lossy(&o.stdout);
@@ -592,8 +616,8 @@ async fn start_systemd_service() -> Result<(), Box<dyn std::error::Error>> {
 
 /// 确保单实例运行
 fn ensure_single_instance() -> anyhow::Result<()> {
-    use std::fs::OpenOptions;
     use fs2::FileExt;
+    use std::fs::OpenOptions;
 
     let lock_file = std::env::temp_dir().join("claw-one.lock");
     let file = OpenOptions::new()
@@ -616,11 +640,11 @@ async fn logging_middleware(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
-    
+
     let method = request.method().clone();
     let uri = request.uri().clone();
     let _headers = request.headers().clone();
-    
+
     // 尝试读取请求体（用于调试）
     let (parts, body) = request.into_parts();
     let bytes = match axum::body::to_bytes(body, usize::MAX).await {
@@ -630,15 +654,15 @@ async fn logging_middleware(
             return (axum::http::StatusCode::BAD_REQUEST, "读取请求体失败").into_response();
         }
     };
-    
+
     // 重新构造请求
     let body = axum::body::Body::from(bytes.clone());
     let request = axum::http::Request::from_parts(parts, body);
-    
+
     // 执行请求
     let response = next.run(request).await;
     let status = response.status();
-    
+
     // 提取响应体（如果是错误）
     if status.is_server_error() || status.is_client_error() {
         let (parts, body) = response.into_parts();
@@ -646,30 +670,31 @@ async fn logging_middleware(
             Ok(bytes) => bytes,
             Err(_) => return axum::http::Response::from_parts(parts, axum::body::Body::empty()),
         };
-        
+
         let body_str = String::from_utf8_lossy(&bytes);
-        
+
         if status.is_server_error() {
             tracing::error!(
                 "{} {} -> {} (服务器错误)\n响应: {}",
-                method, uri, status, body_str
+                method,
+                uri,
+                status,
+                body_str
             );
         } else {
             tracing::warn!(
                 "{} {} -> {} (客户端错误)\n响应: {}",
-                method, uri, status, body_str
+                method,
+                uri,
+                status,
+                body_str
             );
         }
-        
+
         // 重新构造响应
-        return axum::http::Response::from_parts(
-            parts,
-            axum::body::Body::from(bytes)
-        );
+        return axum::http::Response::from_parts(parts, axum::body::Body::from(bytes));
     }
-    
+
     tracing::info!("{} {} -> {}", method, uri, status);
     response
 }
-
-

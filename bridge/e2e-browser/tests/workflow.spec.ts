@@ -46,9 +46,17 @@ test.describe('User Workflows', () => {
     await page.goto('/config/channel');
     await page.waitForLoadState('networkidle');
     
-    // 启用 Mattermost
-    await page.locator('.channel-section', { hasText: 'Mattermost' }).locator('.el-switch').click();
-    await page.waitForTimeout(300);
+    // 启用 Mattermost（如果未启用）
+    const mattermostSection = page.locator('.channel-section', { hasText: 'Mattermost' });
+    const switch_ = mattermostSection.locator('.el-switch');
+    const isChecked = await switch_.locator('input').isChecked().catch(() => false);
+    if (!isChecked) {
+      await switch_.click();
+      await page.waitForTimeout(500);
+    }
+    
+    // 等待添加账号按钮出现
+    await expect(page.locator('button:has-text("+ 添加账号")')).toBeVisible();
     
     // 点击添加账号
     await page.click('button:has-text("+ 添加账号")');

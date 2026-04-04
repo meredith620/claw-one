@@ -9,13 +9,13 @@ pub mod validation;
 
 // Re-export for integration tests
 pub use config::ConfigManager;
-pub use state::StateManager;
 pub use settings::Settings;
+pub use state::StateManager;
 
 use axum::{
+    response::Json,
     routing::{get, post},
     Router,
-    response::Json,
 };
 use std::sync::Arc;
 
@@ -37,18 +37,41 @@ pub fn build_api_router(
         .route("/api/health", get(health_handler))
         .route("/api/state", get(api::state::handler))
         // Config API
-        .route("/api/config", get(api::config::get_handler).post(api::config::post_handler))
-        .route("/api/config/:module", get(api::config::get_module_handler).post(api::config::save_module_handler))
+        .route(
+            "/api/config",
+            get(api::config::get_handler).post(api::config::post_handler),
+        )
+        .route(
+            "/api/config/:module",
+            get(api::config::get_module_handler).post(api::config::save_module_handler),
+        )
         // Provider config API
         .route("/api/providers", get(api::providers::list_providers))
-        .route("/api/providers/:id", get(api::providers::get_provider).post(api::providers::save_provider).delete(api::providers::delete_provider))
-        .route("/api/model-priority", get(api::providers::get_model_priority).post(api::providers::save_model_priority))
+        .route(
+            "/api/providers/:id",
+            get(api::providers::get_provider)
+                .post(api::providers::save_provider)
+                .delete(api::providers::delete_provider),
+        )
+        .route(
+            "/api/model-priority",
+            get(api::providers::get_model_priority).post(api::providers::save_model_priority),
+        )
         // Agent config API
-        .route("/api/agents", get(api::agents::get_agents).post(api::agents::save_agents))
+        .route(
+            "/api/agents",
+            get(api::agents::get_agents).post(api::agents::save_agents),
+        )
         // Memory config API
-        .route("/api/memory", get(api::memory::get_memory).post(api::memory::save_memory))
+        .route(
+            "/api/memory",
+            get(api::memory::get_memory).post(api::memory::save_memory),
+        )
         // Channel config API
-        .route("/api/channels", get(api::channels::get_channels).post(api::channels::save_channels))
+        .route(
+            "/api/channels",
+            get(api::channels::get_channels).post(api::channels::save_channels),
+        )
         // Config validation API
         .route("/api/config/validate", post(api::config::validate_handler))
         .route("/api/snapshots", get(api::snapshots::handler))

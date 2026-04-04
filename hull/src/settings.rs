@@ -80,15 +80,33 @@ pub struct FeaturesConfig {
 }
 
 // 默认值函数
-fn default_host() -> String { "0.0.0.0".to_string() }
-fn default_port() -> u16 { 8080 }
-fn default_log_level() -> String { "info".to_string() }
-fn default_openclaw_home() -> String { "~/.openclaw".to_string() }
-fn default_service_name() -> String { "openclaw-gateway".to_string() }
-fn default_health_port() -> u16 { 18790 }
-fn default_health_timeout() -> u64 { 30 }
-fn default_data_dir() -> String { "~/.config/claw-one".to_string() }
-fn default_true() -> bool { true }
+fn default_host() -> String {
+    "0.0.0.0".to_string()
+}
+fn default_port() -> u16 {
+    8080
+}
+fn default_log_level() -> String {
+    "info".to_string()
+}
+fn default_openclaw_home() -> String {
+    "~/.openclaw".to_string()
+}
+fn default_service_name() -> String {
+    "openclaw-gateway".to_string()
+}
+fn default_health_port() -> u16 {
+    18790
+}
+fn default_health_timeout() -> u64 {
+    30
+}
+fn default_data_dir() -> String {
+    "~/.config/claw-one".to_string()
+}
+fn default_true() -> bool {
+    true
+}
 
 impl Default for ServerConfig {
     fn default() -> Self {
@@ -162,23 +180,26 @@ impl Settings {
                 eprintln!("⚠️  CLAW_ONE_CONFIG 指向的文件不存在: {}", config_path);
             }
         }
-        
+
         // 2. 尝试从可执行文件路径推导（适用于安装后的运行）
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(install_dir) = exe_path.parent().and_then(|p| p.parent()) {
                 let derived_config = install_dir.join("config").join("claw-one.toml");
-                eprintln!("[DEBUG] 尝试从可执行文件路径推导配置: {}", derived_config.display());
+                eprintln!(
+                    "[DEBUG] 尝试从可执行文件路径推导配置: {}",
+                    derived_config.display()
+                );
                 if derived_config.exists() {
                     eprintln!("[DEBUG] 从 {} 加载配置", derived_config.display());
                     return Self::from_file(&derived_config);
                 }
             }
         }
-        
+
         // 3. 尝试用户主目录
-        let home_config = dirs::home_dir()
-            .map(|h| h.join("claw-one").join("config").join("claw-one.toml"));
-        
+        let home_config =
+            dirs::home_dir().map(|h| h.join("claw-one").join("config").join("claw-one.toml"));
+
         if let Some(ref config_path) = home_config {
             eprintln!("[DEBUG] 尝试用户主目录配置: {}", config_path.display());
             if config_path.exists() {
@@ -186,12 +207,12 @@ impl Settings {
                 return Self::from_file(config_path);
             }
         }
-        
+
         // 4. 尝试当前目录（开发环境）
         let cwd_config = std::env::current_dir()
             .ok()
             .map(|d| d.join("config").join("claw-one.toml"));
-        
+
         if let Some(ref config_path) = cwd_config {
             eprintln!("[DEBUG] 尝试当前目录配置: {}", config_path.display());
             if config_path.exists() {
@@ -199,7 +220,7 @@ impl Settings {
                 return Self::from_file(config_path);
             }
         }
-        
+
         eprintln!("⚠️  未找到配置文件，使用默认配置");
         eprintln!("   尝试过的路径:");
         if let Some(ref p) = home_config {
@@ -226,7 +247,7 @@ impl Settings {
         if !self.paths.static_dir.is_empty() {
             return expand_path(&self.paths.static_dir);
         }
-        
+
         // 从可执行文件路径推导
         if let Ok(exe) = std::env::current_exe() {
             if let Some(install_dir) = exe.parent().and_then(|p| p.parent()) {
@@ -242,7 +263,7 @@ impl Settings {
                 }
             }
         }
-        
+
         // 默认回退
         PathBuf::from("../static/dist")
     }
@@ -291,11 +312,15 @@ pub fn check_config_or_exit() {
     match Settings::from_env() {
         Ok(settings) => {
             // 检查是否是默认配置
-            if settings.openclaw.service_name == "openclaw-gateway" 
-                && settings.openclaw.openclaw_home == default_openclaw_home() {
+            if settings.openclaw.service_name == "openclaw-gateway"
+                && settings.openclaw.openclaw_home == default_openclaw_home()
+            {
                 println!("⚠️  警告: 您正在使用默认配置");
                 println!("   OpenClaw 根目录: {}", settings.openclaw_home().display());
-                println!("   配置文件路径: {}", settings.openclaw_config_path().display());
+                println!(
+                    "   配置文件路径: {}",
+                    settings.openclaw_config_path().display()
+                );
                 println!("   如需修改，请编辑配置文件设置正确的 OpenClaw 连接信息");
             }
         }

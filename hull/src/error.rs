@@ -12,25 +12,25 @@ pub type Result<T> = std::result::Result<T, AppError>;
 pub enum AppError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
-    
+
     #[error("Config not found")]
     ConfigNotFound,
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Bad request: {0}")]
     BadRequest(String),
-    
+
     #[error("Runtime error: {0}")]
     Runtime(String),
-    
+
     #[error("Git error: {0}")]
     Git(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -47,16 +47,25 @@ impl IntoResponse for AppError {
         // 记录详细错误信息
         let error_detail = format!("{:#?}", self);
         tracing::error!("Handler error: {}\nDetail: {}", self, error_detail);
-        
+
         let (status, message) = match &self {
             AppError::ConfigNotFound => (StatusCode::NOT_FOUND, self.to_string()),
             AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Runtime(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            AppError::Git(msg) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Git error: {}", msg)),
-            AppError::Io(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("IO error: {}", e)),
+            AppError::Git(msg) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Git error: {}", msg),
+            ),
+            AppError::Io(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("IO error: {}", e),
+            ),
             AppError::Json(e) => (StatusCode::BAD_REQUEST, format!("JSON error: {}", e)),
-            AppError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal error: {}", msg)),
+            AppError::Internal(msg) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {}", msg),
+            ),
         };
 
         // 确保错误消息不为空

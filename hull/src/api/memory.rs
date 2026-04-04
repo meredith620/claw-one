@@ -1,13 +1,7 @@
-use axum::{
-    extract::Extension,
-    Json,
-};
+use axum::{extract::Extension, Json};
 use std::sync::Arc;
 
-use crate::{
-    config::ConfigManager,
-    error::Result,
-};
+use crate::{config::ConfigManager, error::Result};
 
 /// 获取 Memory 配置
 /// 如果配置不存在，返回 null (serde_json::Value::Null)
@@ -24,11 +18,14 @@ pub async fn save_memory(
     Json(data): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
     config_manager.save_memory(&data).await?;
-    
+
     // 读取当前完整配置并同步到 version-config/
     let config = config_manager.get_config().await?;
-    
-    match config_manager.sync_to_version_config(&config, Some("Update memory config".to_string())).await {
+
+    match config_manager
+        .sync_to_version_config(&config, Some("Update memory config".to_string()))
+        .await
+    {
         Ok(Some(commit_id)) => {
             return Ok(Json(serde_json::json!({
                 "success": true,

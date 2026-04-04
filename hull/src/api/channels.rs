@@ -1,13 +1,7 @@
-use axum::{
-    extract::Extension,
-    Json,
-};
+use axum::{extract::Extension, Json};
 use std::sync::Arc;
 
-use crate::{
-    config::ConfigManager,
-    error::Result,
-};
+use crate::{config::ConfigManager, error::Result};
 
 /// 获取 Channel 配置
 pub async fn get_channels(
@@ -23,11 +17,14 @@ pub async fn save_channels(
     Json(data): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>> {
     config_manager.save_channels(&data).await?;
-    
+
     // 读取当前完整配置并同步到 version-config/
     let config = config_manager.get_config().await?;
-    
-    match config_manager.sync_to_version_config(&config, Some("Update channel config".to_string())).await {
+
+    match config_manager
+        .sync_to_version_config(&config, Some("Update channel config".to_string()))
+        .await
+    {
         Ok(Some(commit_id)) => {
             return Ok(Json(serde_json::json!({
                 "success": true,

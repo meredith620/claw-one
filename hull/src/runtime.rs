@@ -85,33 +85,33 @@ impl RuntimeManager {
     pub async fn restart(&self) -> Result<()> {
         // 获取当前进程 PID（用于后续判断重启是否完成）
         let old_pid = self.get_process_pid().await;
-        
+
         // 执行重启命令
         self.systemctl("restart").await?;
-        
+
         // 等待进程变化（旧进程停止或新进程启动）
         let mut attempts = 0;
         let max_attempts = 20; // 最多等待 10 秒
-        
+
         while attempts < max_attempts {
             let current_pid = self.get_process_pid().await;
-            
+
             // 如果 PID 变化了，说明重启正在进行
             if current_pid != old_pid {
                 // 再等待一小段时间让服务完全启动
                 tokio::time::sleep(Duration::from_millis(500)).await;
                 return Ok(());
             }
-            
+
             // PID 没变，等待后重试
             tokio::time::sleep(Duration::from_millis(500)).await;
             attempts += 1;
         }
-        
+
         // 超时但继续返回成功，让上层通过健康检查确认状态
         Ok(())
     }
-    
+
     /// 获取 openclaw gateway 进程的 PID
     async fn get_process_pid(&self) -> Option<u32> {
         // 使用 pidof 获取 openclaw-gateway 的 PID，避免 pgrep -f 匹配命令行自身
@@ -119,7 +119,7 @@ impl RuntimeManager {
             .arg("openclaw-gateway")
             .output()
             .ok()?;
-        
+
         if output.status.success() {
             String::from_utf8_lossy(&output.stdout)
                 .trim()
@@ -159,10 +159,7 @@ impl RuntimeManager {
 
     /// 执行健康检查（带超时）
     pub async fn health_check(&self) -> Result<bool> {
-        let result = timeout(
-            self.health_timeout,
-            self.do_health_check(),
-        ).await;
+        let result = timeout(self.health_timeout, self.do_health_check()).await;
 
         match result {
             Ok(Ok(healthy)) => Ok(healthy),
@@ -189,9 +186,7 @@ impl RuntimeManager {
     /// 检查进程是否运行（快速检查）
     pub async fn is_process_running(&self) -> bool {
         // 使用 pidof 检查 openclaw-gateway 是否存在
-        let output = Command::new("pidof")
-            .arg("openclaw-gateway")
-            .output();
+        let output = Command::new("pidof").arg("openclaw-gateway").output();
 
         match output {
             Ok(output) => output.status.success(),
@@ -215,7 +210,7 @@ impl RuntimeManager {
 
         if !output.status.success() {
             return Err(AppError::Runtime(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
 
@@ -225,17 +220,13 @@ impl RuntimeManager {
     /// 通过 openclaw CLI 获取日志（备用方法）
     pub async fn get_logs_via_cli(&self, limit: usize) -> Result<String> {
         let output = Command::new("openclaw")
-            .args([
-                "logs",
-                "--limit",
-                &limit.to_string(),
-            ])
+            .args(["logs", "--limit", &limit.to_string()])
             .output()
             .map_err(|e| AppError::Runtime(format!("Failed to execute openclaw logs: {}", e)))?;
 
         if !output.status.success() {
             return Err(AppError::Runtime(
-                String::from_utf8_lossy(&output.stderr).to_string()
+                String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
 
@@ -283,11 +274,7 @@ impl RuntimeManager {
 
     async fn systemctl(&self, action: &str) -> Result<()> {
         let output = Command::new("systemctl")
-            .args([
-                "--user",
-                action,
-                &format!("{}.service", self.service_name),
-            ])
+            .args(["--user", action, &format!("{}.service", self.service_name)])
             .output()
             .map_err(|e| AppError::Runtime(format!("Failed to {} service: {}", action, e)))?;
 
@@ -331,7 +318,7 @@ impl RuntimeManager {
 
         let content = std::fs::read_to_string(&config_path).ok()?;
         let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-        
+
         json.get("gateway")
             .and_then(|g| g.get("port"))
             .and_then(|p| p.as_u64())
@@ -340,12 +327,13 @@ impl RuntimeManager {
 
     async fn http_health_check(&self) -> Result<bool> {
         // 优先从 openclaw.json 读取端口，否则使用配置的 health_port
-        let port = self.get_gateway_port_from_config()
+        let port = self
+            .get_gateway_port_from_config()
             .unwrap_or(self.health_port);
 
         // 使用 /healthz 端点进行健康检查
         let url = format!("http://127.0.0.1:{}/healthz", port);
-        
+
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(5))
             .build()
@@ -358,16 +346,17 @@ impl RuntimeManager {
     }
 
     async fn cli_health_check(&self) -> Result<bool> {
-        let output = Command::new("openclaw")
-            .args(["health", "--json"])
-            .output();
+        let output = Command::new("openclaw").args(["health", "--json"]).output();
 
         match output {
             Ok(output) if output.status.success() => {
                 // 尝试解析 JSON 输出
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 match serde_json::from_str::<serde_json::Value>(&stdout) {
-                    Ok(json) => Ok(json.get("healthy").and_then(|v| v.as_bool()).unwrap_or(false)),
+                    Ok(json) => Ok(json
+                        .get("healthy")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)),
                     Err(_) => Ok(false),
                 }
             }
@@ -388,8 +377,11 @@ impl RuntimeManager {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
-        Ok(format!("{}", if stderr.is_empty() { stdout } else { stderr }))
+
+        Ok(format!(
+            "{}",
+            if stderr.is_empty() { stdout } else { stderr }
+        ))
     }
 }
 

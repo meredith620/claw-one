@@ -1,5 +1,5 @@
-use serde_json::Value;
 use crate::error::Result;
+use serde_json::Value;
 
 /// 配置验证错误
 #[derive(Debug, Clone)]
@@ -47,13 +47,13 @@ pub fn validate_config(config: &Value) -> ValidationResult {
 
     // 验证顶层结构
     validate_structure(config, &mut result);
-    
+
     // 验证 models 配置
     validate_models(config, &mut result);
-    
+
     // 验证 agents 配置
     validate_agents(config, &mut result);
-    
+
     // 验证 channels 配置
     validate_channels(config, &mut result);
 
@@ -63,10 +63,10 @@ pub fn validate_config(config: &Value) -> ValidationResult {
 /// 仅验证 agents 配置（用于增量保存）
 pub fn validate_agents_only(config: &Value) -> ValidationResult {
     let mut result = ValidationResult::new();
-    
+
     // 只验证 agents 配置
     validate_agents(config, &mut result);
-    
+
     result
 }
 
@@ -288,7 +288,11 @@ fn validate_mattermost(config: &Value, result: &mut ValidationResult) {
     }
 
     // 如果启用，检查 accounts
-    if config.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+    if config
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         if let Some(accounts) = config.get("accounts") {
             if !accounts.is_object() {
                 result.add_error(&format!("{}.accounts", base_path), "accounts 必须是对象");
@@ -296,7 +300,10 @@ fn validate_mattermost(config: &Value, result: &mut ValidationResult) {
                 result.add_warning(&format!("{}.accounts", base_path), "已启用但未配置账号");
             }
         } else {
-            result.add_error(&format!("{}.accounts", base_path), "已启用但缺少 accounts 配置");
+            result.add_error(
+                &format!("{}.accounts", base_path),
+                "已启用但缺少 accounts 配置",
+            );
         }
     }
 }
@@ -318,7 +325,11 @@ fn validate_feishu(config: &Value, result: &mut ValidationResult) {
     }
 
     // 如果启用，检查必要字段
-    if config.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+    if config
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         if config.get("appId").is_none() {
             result.add_error(base_path, "已启用但缺少 appId");
         }
@@ -331,20 +342,20 @@ fn validate_feishu(config: &Value, result: &mut ValidationResult) {
 /// 验证配置并返回详细的错误信息
 pub fn validate_config_with_details(config: &Value) -> std::result::Result<(), Vec<String>> {
     let result = validate_config(config);
-    
+
     if result.valid && result.errors.is_empty() {
         Ok(())
     } else {
         let mut messages = Vec::new();
-        
+
         for error in &result.errors {
             messages.push(format!("[错误] {}: {}", error.path, error.message));
         }
-        
+
         for warning in &result.warnings {
             messages.push(format!("[警告] {}: {}", warning.path, warning.message));
         }
-        
+
         Err(messages)
     }
 }
@@ -392,10 +403,14 @@ mod tests {
                 }
             }
         });
-        
+
         let result = validate_config(&config);
         // 完整合法配置应该无错误
-        assert!(result.errors.is_empty(), "Expected no errors but got: {:?}", result.errors);
+        assert!(
+            result.errors.is_empty(),
+            "Expected no errors but got: {:?}",
+            result.errors
+        );
     }
 
     #[test]
@@ -404,7 +419,7 @@ mod tests {
             "agents": {},
             "channels": {}
         });
-        
+
         let result = validate_config(&config);
         assert!(result.errors.iter().any(|e| e.message.contains("models")));
     }
@@ -415,7 +430,7 @@ mod tests {
             "models": {},
             "channels": {}
         });
-        
+
         let result = validate_config(&config);
         assert!(result.errors.iter().any(|e| e.message.contains("agents")));
     }
@@ -426,7 +441,7 @@ mod tests {
             "models": {},
             "agents": {}
         });
-        
+
         let result = validate_config(&config);
         assert!(result.errors.iter().any(|e| e.message.contains("channels")));
     }
@@ -445,7 +460,7 @@ mod tests {
             "agents": {},
             "channels": {}
         });
-        
+
         let result = validate_config(&config);
         assert!(result.errors.iter().any(|e| e.message.contains("apiKey")));
     }
@@ -464,9 +479,12 @@ mod tests {
             "agents": {},
             "channels": {}
         });
-        
+
         let result = validate_config(&config);
-        assert!(result.errors.iter().any(|e| e.message.contains("http") || e.message.contains("baseUrl")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.message.contains("http") || e.message.contains("baseUrl")));
     }
 
     #[test]
@@ -481,9 +499,12 @@ mod tests {
                 }
             }
         });
-        
+
         let result = validate_config(&config);
-        assert!(result.errors.iter().any(|e| e.path.contains("mattermost") && e.message.contains("accounts")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.path.contains("mattermost") && e.message.contains("accounts")));
     }
 
     #[test]
@@ -497,9 +518,12 @@ mod tests {
             },
             "channels": {}
         });
-        
+
         let result = validate_config(&config);
-        assert!(result.errors.iter().any(|e| e.path.contains("list[0]") && e.message.contains("id")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|e| e.path.contains("list[0]") && e.message.contains("id")));
     }
 
     #[test]
@@ -515,10 +539,13 @@ mod tests {
             },
             "channels": {}
         });
-        
+
         let result = validate_config(&config);
         // 应该有 warning，但不是 error
-        assert!(result.warnings.iter().any(|w| w.message.contains("provider")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.message.contains("provider")));
     }
 
     #[test]

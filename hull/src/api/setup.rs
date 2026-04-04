@@ -1,10 +1,7 @@
 use axum::{extract::Extension, Json};
 use std::sync::Arc;
 
-use crate::{
-    config::ConfigManager,
-    error::Result,
-};
+use crate::{config::ConfigManager, error::Result};
 
 /// 检查是否是首次配置
 pub async fn check_handler(
