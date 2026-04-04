@@ -32,6 +32,58 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
+    /// 过滤事件对象字段（Bug #1 防护）
+    /// 递归移除 _vts 和 isTrusted 等事件对象字段
+    fn filter_event_fields(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(map) => {
+                let mut filtered = serde_json::Map::new();
+                for (key, val) in map.iter() {
+                    // 跳过事件对象字段
+                    if key == "_vts" || key == "isTrusted" {
+                        continue;
+                    }
+                    // 递归过滤嵌套对象
+                    filtered.insert(key.clone(), Self::filter_event_fields(val));
+                }
+                serde_json::Value::Object(filtered)
+            }
+            serde_json::Value::Array(arr) => {
+                serde_json::Value::Array(
+                    arr.iter().map(|v| Self::filter_event_fields(v)).collect()
+                )
+            }
+            _ => value.clone(),
+        }
+    }
+
+    /// 深度合并两个 JSON 对象
+    /// new 中的字段覆盖 base 中的同名字段，new 中没有的保留 base 的值
+    fn deep_merge(base: &serde_json::Value, new: &serde_json::Value) -> serde_json::Value {
+        match (base, new) {
+            (serde_json::Value::Object(base_map), serde_json::Value::Object(new_map)) => {
+                let mut result = base_map.clone();
+                for (key, new_val) in new_map.iter() {
+                    if let Some(base_val) = result.get(key) {
+                        // 如果两边都是对象，递归合并
+                        if base_val.is_object() && new_val.is_object() {
+                            result.insert(key.clone(), Self::deep_merge(base_val, new_val));
+                        } else {
+                            // 否则直接用新值覆盖
+                            result.insert(key.clone(), new_val.clone());
+                        }
+                    } else {
+                        // key 不存在于 base，直接插入
+                        result.insert(key.clone(), new_val.clone());
+                    }
+                }
+                serde_json::Value::Object(result)
+            }
+            // 如果 new 不是对象，直接返回 new
+            _ => new.clone(),
+        }
+    }
+
     pub fn new() -> Self {
         // 首先尝试从 CLAW_OPENCLAW_CONFIG 获取（专门用于 openclaw.json）
         let config_path = std::env::var("CLAW_OPENCLAW_CONFIG")
@@ -1102,6 +1154,9 @@ impl ConfigManager {
     pub async fn save_agents(&self, agents: &serde_json::Value) -> Result<()> {
         let mut config = self.get_config().await?;
 
+        // 过滤事件对象字段（Bug #1 防护）
+        let filtered_agents = Self::filter_event_fields(agents);
+
         // 获取现有 agents 配置（如果存在）
         let existing_agents = config.get("agents").cloned().unwrap_or_else(|| {
             serde_json::json!({
@@ -1131,7 +1186,7 @@ impl ConfigManager {
 
         // 合并配置：保留现有 defaults 中前端未提供的字段
         let merged = if let (Some(existing_obj), Some(new_obj)) =
-            (existing_agents.as_object(), agents.as_object())
+            (existing_agents.as_object(), filtered_agents.as_object())
         {
             let mut result = existing_obj.clone();
 
@@ -1214,7 +1269,22 @@ impl ConfigManager {
             config["agents"]["defaults"] = serde_json::json!({});
         }
 
-        config["agents"]["defaults"]["memorySearch"] = memory.clone();
+        // 过滤事件对象字段（Bug #1 防护）
+        let filtered_memory = Self::filter_event_fields(memory);
+
+        // 深度合并：保留现有配置，新配置覆盖
+        let existing_memory = config["agents"]["defaults"].get("memorySearch").cloned();
+        let merged_memory = if let Some(existing) = existing_memory {
+            if existing.is_object() && filtered_memory.is_object() {
+                Self::deep_merge(&existing, &filtered_memory)
+            } else {
+                filtered_memory
+            }
+        } else {
+            filtered_memory
+        };
+
+        config["agents"]["defaults"]["memorySearch"] = merged_memory;
         self.save_config(&config).await?;
         Ok(())
     }
@@ -1244,7 +1314,23 @@ impl ConfigManager {
     /// 保存 Channel 模块配置
     pub async fn save_channels(&self, channels: &serde_json::Value) -> Result<()> {
         let mut config = self.get_config().await?;
-        config["channels"] = channels.clone();
+
+        // 过滤事件对象字段（Bug #1 防护）
+        let filtered_channels = Self::filter_event_fields(channels);
+
+        // 深度合并：保留现有配置，新配置覆盖
+        let existing_channels = config.get("channels").cloned();
+        let merged_channels = if let Some(existing) = existing_channels {
+            if existing.is_object() && filtered_channels.is_object() {
+                Self::deep_merge(&existing, &filtered_channels)
+            } else {
+                filtered_channels
+            }
+        } else {
+            filtered_channels
+        };
+
+        config["channels"] = merged_channels;
         self.save_config(&config).await?;
         Ok(())
     }
