@@ -1,7 +1,11 @@
 use axum::{extract::Extension, Json};
 use std::sync::Arc;
 
-use crate::{config::ConfigManager, error::{AppError, Result}, validation};
+use crate::{
+    config::ConfigManager,
+    error::{AppError, Result},
+    validation,
+};
 
 /// 获取 Channel 配置
 pub async fn get_channels(

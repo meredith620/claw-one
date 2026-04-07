@@ -26,7 +26,11 @@ async fn test_agent_id_with_space() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Agent ID with space should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Agent ID with space should return 400"
+    );
 }
 
 /// Agent ID 包含非法字符：双引号
@@ -49,7 +53,11 @@ async fn test_agent_id_with_double_quote() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Agent ID with double quote should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Agent ID with double quote should return 400"
+    );
 }
 
 /// Agent ID 包含非法字符：单引号
@@ -72,7 +80,11 @@ async fn test_agent_id_with_single_quote() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Agent ID with single quote should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Agent ID with single quote should return 400"
+    );
 }
 
 /// Agent ID 包含非法字符：正斜杠
@@ -95,7 +107,11 @@ async fn test_agent_id_with_forward_slash() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Agent ID with forward slash should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Agent ID with forward slash should return 400"
+    );
 }
 
 /// Agent ID 包含非法字符：反斜杠
@@ -118,7 +134,11 @@ async fn test_agent_id_with_backslash() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Agent ID with backslash should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Agent ID with backslash should return 400"
+    );
 }
 
 /// Agent ID 超长（> 256 字符）
@@ -142,7 +162,11 @@ async fn test_agent_id_too_long() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Agent ID > 256 chars should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Agent ID > 256 chars should return 400"
+    );
 }
 
 /// Agent ID 恰好 256 字符（边界测试，应该通过）
@@ -166,7 +190,11 @@ async fn test_agent_id_max_length_valid() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 200, "Agent ID of exactly 256 chars should succeed");
+    assert_eq!(
+        response.status(),
+        200,
+        "Agent ID of exactly 256 chars should succeed"
+    );
 }
 
 /// Agent ID 为空字符串
@@ -236,7 +264,11 @@ async fn test_agent_list_one_invalid_id() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "One invalid ID in list should cause 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "One invalid ID in list should cause 400"
+    );
 }
 
 /// 正常 Agent ID（字母数字连字符下划线）应该成功
@@ -269,7 +301,12 @@ async fn test_agent_id_valid_formats() {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), 200, "Valid Agent ID '{}' should succeed", id);
+        assert_eq!(
+            response.status(),
+            200,
+            "Valid Agent ID '{}' should succeed",
+            id
+        );
     }
 }
 
@@ -296,7 +333,11 @@ async fn test_channel_id_with_space() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Channel ID with space should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Channel ID with space should return 400"
+    );
 }
 
 /// Channel ID 包含非法字符：双引号
@@ -318,7 +359,11 @@ async fn test_channel_id_with_double_quote() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Channel ID with double quote should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Channel ID with double quote should return 400"
+    );
 }
 
 /// Channel ID 包含非法字符：正斜杠
@@ -340,7 +385,11 @@ async fn test_channel_id_with_forward_slash() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Channel ID with forward slash should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Channel ID with forward slash should return 400"
+    );
 }
 
 /// Channel ID 超长（> 256 字符）
@@ -363,7 +412,11 @@ async fn test_channel_id_too_long() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 400, "Channel ID > 256 chars should return 400");
+    assert_eq!(
+        response.status(),
+        400,
+        "Channel ID > 256 chars should return 400"
+    );
 }
 
 /// Channel ID 为空（空 key 在 JSON 中会被忽略，所以测试空字符串）
@@ -408,6 +461,11 @@ async fn test_channel_id_valid_formats() {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), 200, "Valid Channel config should succeed: {:?}", config);
+        assert_eq!(
+            response.status(),
+            200,
+            "Valid Channel config should succeed: {:?}",
+            config
+        );
     }
 }
