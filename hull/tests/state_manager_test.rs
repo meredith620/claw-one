@@ -177,6 +177,7 @@ mod tests {
     // ==================== 状态转换测试 ====================
 
     #[tokio::test]
+    #[ignore = "requires real OpenClaw runtime"]
     async fn test_safe_mode_to_normal_recovery() {
         let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
 
@@ -214,6 +215,7 @@ mod tests {
     // ==================== 配置应用流程测试 ====================
 
     #[tokio::test]
+    #[ignore = "requires real OpenClaw runtime"]
     async fn test_apply_config_sets_applying_state() {
         let (_temp_dir, state_manager): (TempDir, StateManager) = create_test_state_manager().await;
 
