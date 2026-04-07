@@ -66,11 +66,27 @@ pub fn validate_config(config: &Value) -> ValidationResult {
 }
 
 /// 仅验证 agents 配置（用于增量保存）
+/// agents API 直接接收 agents 配置作为根对象（如 {"defaults": {...}, "list": [...]}}）
+/// 需要包装成 {"agents": ...} 再验证
 pub fn validate_agents_only(config: &Value) -> ValidationResult {
     let mut result = ValidationResult::new();
 
-    // 只验证 agents 配置
-    validate_agents(config, &mut result);
+    // 包装成完整的 config 结构以复用 validate_agents
+    let wrapped = serde_json::json!({"agents": config});
+    validate_agents(&wrapped, &mut result);
+
+    result
+}
+
+/// 仅验证 channels 配置（用于增量保存）
+/// channels API 直接接收 channel 类型作为根对象（如 {"mattermost": {...}}）
+/// 需要包装成 {"channels": ...} 再验证
+pub fn validate_channels_only(channels: &Value) -> ValidationResult {
+    let mut result = ValidationResult::new();
+
+    // 包装成完整的 config 结构以复用 validate_channels
+    let wrapped = serde_json::json!({"channels": channels});
+    validate_channels(&wrapped, &mut result);
 
     result
 }
@@ -233,6 +249,46 @@ fn validate_memory_search(config: &Value, result: &mut ValidationResult) {
     }
 }
 
+/// Agent ID 最大长度
+const MAX_AGENT_ID_LEN: usize = 256;
+
+/// 非法字符（不允许在 Agent/Channel ID 中出现）
+const ILLEGAL_ID_CHARS: &[char] = &[' ', '\t', '\n', '"', '\'', '/', '\\'];
+
+/// 验证 Agent ID 格式
+/// 返回 Some(error_msg) 如果无效，None 如果有效
+fn validate_agent_id_format(id: &str) -> Option<String> {
+    if id.is_empty() {
+        return Some("Agent ID 不能为空".to_string());
+    }
+    if id.len() > MAX_AGENT_ID_LEN {
+        return Some(format!("Agent ID 不能超过 {} 个字符", MAX_AGENT_ID_LEN));
+    }
+    for c in ILLEGAL_ID_CHARS {
+        if id.contains(*c) {
+            return Some(format!("Agent ID 包含非法字符: '{}'", c));
+        }
+    }
+    None
+}
+
+/// 验证 Channel ID 格式
+/// 返回 Some(error_msg) 如果无效，None 如果有效
+fn validate_channel_id_format(id: &str) -> Option<String> {
+    if id.is_empty() {
+        return Some("Channel ID 不能为空".to_string());
+    }
+    if id.len() > MAX_AGENT_ID_LEN {
+        return Some(format!("Channel ID 不能超过 {} 个字符", MAX_AGENT_ID_LEN));
+    }
+    for c in ILLEGAL_ID_CHARS {
+        if id.contains(*c) {
+            return Some(format!("Channel ID 包含非法字符: '{}'", c));
+        }
+    }
+    None
+}
+
 /// 验证单个 Agent 项
 fn validate_agent_item(index: usize, config: &Value, result: &mut ValidationResult) {
     let base_path = format!("agents.list[{}]", index);
@@ -247,6 +303,14 @@ fn validate_agent_item(index: usize, config: &Value, result: &mut ValidationResu
     // 检查必需字段
     if !agent.contains_key("id") {
         result.add_error(&base_path, "缺少 id");
+    } else if let Some(id_val) = agent.get("id") {
+        if let Some(id_str) = id_val.as_str() {
+            if let Some(err) = validate_agent_id_format(id_str) {
+                result.add_error(&format!("{}.id", base_path), &err);
+            }
+        } else {
+            result.add_error(&format!("{}.id", base_path), "id 必须是字符串");
+        }
     }
 
     if !agent.contains_key("name") {
@@ -263,6 +327,15 @@ fn validate_channels(config: &Value, result: &mut ValidationResult) {
     if !channels.is_object() {
         result.add_error("channels", "channels 必须是对象");
         return;
+    }
+
+    // 验证每个 channel 类型的 ID（顶层 key）
+    if let Some(channels_obj) = channels.as_object() {
+        for channel_id in channels_obj.keys() {
+            if let Some(err) = validate_channel_id_format(channel_id) {
+                result.add_error(&format!("channels.{}", channel_id), &err);
+            }
+        }
     }
 
     // 验证 mattermost

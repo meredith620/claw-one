@@ -115,7 +115,7 @@ test-fast:
 	cd hull && cargo test --test api_health --test api_config --test api_providers \
 		--test api_agents --test api_memory --test api_channels \
 		--test api_error_cases --test api_module_interaction \
-		--test state_manager_test 2>&1 | tail -40
+		--test state_manager_test --test api_agents_validation 2>&1 | tail -40
 	@echo ""
 	@echo "✅ 快速测试完成!"
 
