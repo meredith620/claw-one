@@ -260,6 +260,7 @@ async fn start_daemon_mode(exe_path: &std::path::Path) {
 
     fs::create_dir_all(&log_dir).ok();
 
+    #[allow(clippy::zombie_processes)]
     let _child = Command::new("nohup")
         .arg(exe_path)
         .arg("run")
@@ -623,6 +624,7 @@ fn ensure_single_instance() -> anyhow::Result<()> {
     let file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&lock_file)?;
 
     match file.try_lock_exclusive() {

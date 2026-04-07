@@ -31,6 +31,12 @@ pub struct ConfigManager {
     version_config_path: PathBuf,
 }
 
+impl Default for ConfigManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConfigManager {
     /// 过滤事件对象字段（Bug #1 防护）
     /// 递归移除 _vts 和 isTrusted 等事件对象字段
@@ -49,9 +55,7 @@ impl ConfigManager {
                 serde_json::Value::Object(filtered)
             }
             serde_json::Value::Array(arr) => {
-                serde_json::Value::Array(
-                    arr.iter().map(|v| Self::filter_event_fields(v)).collect()
-                )
+                serde_json::Value::Array(arr.iter().map(Self::filter_event_fields).collect())
             }
             _ => value.clone(),
         }
@@ -165,7 +169,10 @@ impl ConfigManager {
                         // 展开 ~ 为 home 目录
                         if value.starts_with("~/") {
                             if let Some(home) = dirs::home_dir() {
-                                let expanded = home.join(&value[2..]).to_string_lossy().to_string();
+                                let expanded = home
+                                    .join(value.strip_prefix("~/").unwrap())
+                                    .to_string_lossy()
+                                    .to_string();
                                 eprintln!("[DEBUG] ConfigManager: 展开后路径 = {}", expanded);
                                 return expanded;
                             }
@@ -532,15 +539,13 @@ impl ConfigManager {
 
         // 确保父目录存在
         if let Some(parent) = self.config_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AppError::Io(e))?;
+            fs::create_dir_all(parent).await.map_err(AppError::Io)?;
         }
 
         let content = serde_json::to_string_pretty(config)?;
         fs::write(&self.config_path, content)
             .await
-            .map_err(|e| AppError::Io(e))?;
+            .map_err(AppError::Io)?;
 
         Ok(())
     }
@@ -599,7 +604,7 @@ impl ConfigManager {
             .map(|line| {
                 let parts: Vec<&str> = line.splitn(3, '|').collect();
                 Snapshot {
-                    id: parts.get(0).unwrap_or(&"").to_string(),
+                    id: parts.first().unwrap_or(&"").to_string(),
                     timestamp: parts.get(1).unwrap_or(&"").to_string(),
                     message: parts.get(2).unwrap_or(&"").to_string(),
                 }
@@ -650,7 +655,7 @@ impl ConfigManager {
         // 4. 将 version-config/openclaw.json 复制回主配置路径
         fs::copy(&self.version_config_path, &self.config_path)
             .await
-            .map_err(|e| AppError::Io(e))?;
+            .map_err(AppError::Io)?;
 
         // 5. diff 验证
         let version_content = fs::read_to_string(&self.version_config_path).await?;
@@ -929,7 +934,7 @@ impl ConfigManager {
         };
 
         // 验证并修正 API 类型（必须符合 OpenClaw 支持的类型）
-        let valid_api_types = vec![
+        let valid_api_types = [
             "openai-responses",
             "openai-completions",
             "openai-codex-responses",

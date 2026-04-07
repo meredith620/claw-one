@@ -25,18 +25,14 @@ pub async fn save_channels(
         .sync_to_version_config(&config, Some("Update channel config".to_string()))
         .await
     {
-        Ok(Some(commit_id)) => {
-            return Ok(Json(serde_json::json!({
-                "success": true,
-                "commit": commit_id,
-            })));
-        }
-        Ok(None) => {
-            return Ok(Json(serde_json::json!({"success": true})));
-        }
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
+        Ok(None) => Ok(Json(serde_json::json!({"success": true}))),
         Err(e) => {
             tracing::error!("save_channels: sync_to_version_config failed: {}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }

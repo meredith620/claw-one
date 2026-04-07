@@ -5,10 +5,7 @@ use axum::{
 use std::sync::Arc;
 
 use crate::{
-    config::ConfigManager,
-    error::Result,
-    state::StateManager,
-    types::{ApplyConfigRequest, Config},
+    config::ConfigManager, error::Result, state::StateManager, types::Config,
     validation::validate_config,
 };
 
@@ -212,25 +209,21 @@ pub async fn save_module_handler(
         .sync_to_version_config(&full_config, Some(format!("Update {} module", module)))
         .await
     {
-        Ok(Some(commit_id)) => {
-            return Ok(Json(serde_json::json!({
-                "success": true,
-                "commit": commit_id,
-            })));
-        }
-        Ok(None) => {
-            return Ok(Json(serde_json::json!({
-                "success": true,
-                "message": format!("{} module saved successfully", module),
-            })));
-        }
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
+        Ok(None) => Ok(Json(serde_json::json!({
+            "success": true,
+            "message": format!("{} module saved successfully", module),
+        }))),
         Err(e) => {
             tracing::error!(
                 "save_module_handler [{}]: sync_to_version_config failed: {}",
                 module,
                 e
             );
-            return Err(e);
+            Err(e)
         }
     }
 }

@@ -37,7 +37,7 @@ fi
 echo "  检查编译..."
 if command -v cargo >/dev/null 2>&1; then
     cd hull
-    if cargo check 2>&1 | grep -q "error"; then
+    if cargo check 2>&1 | grep -q "^error"; then
         echo "    ❌ 编译错误"
         FAILED=$((FAILED + 1))
     else
@@ -53,7 +53,7 @@ echo "  运行 Clippy..."
 if command -v cargo >/dev/null 2>&1; then
     cd hull
     # 允许警告，只检查错误
-    if cargo clippy -- -D warnings 2>&1 | grep -q "error"; then
+    if cargo clippy -- -D warnings 2>&1 | grep -q "^error"; then
         echo "    ❌ Clippy 错误"
         FAILED=$((FAILED + 1))
     else

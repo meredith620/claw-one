@@ -33,4 +33,7 @@ Thumbs.db
 /playwright-report/
 /test-results/
 /playwright/.cache/
+e2e/playwright-report/
+e2e/test-results/
+bridge/test-results/
 

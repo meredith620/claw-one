@@ -38,7 +38,23 @@ pub struct RuntimeManager {
     openclaw_home: String,
 }
 
+impl Default for RuntimeManager {
+    fn default() -> Self {
+        Self {
+            service_name: "openclaw-gateway".to_string(),
+            health_port: 18790,
+            health_timeout: Duration::from_secs(30),
+            openclaw_home: "~/.openclaw".to_string(),
+        }
+    }
+}
+
 impl RuntimeManager {
+    /// 使用默认配置创建（向后兼容）
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// 从配置创建 RuntimeManager
     pub fn from_config(config: &OpenClawConfig) -> Self {
         Self {
@@ -46,16 +62,6 @@ impl RuntimeManager {
             health_port: config.health_port,
             health_timeout: Duration::from_secs(config.health_timeout),
             openclaw_home: config.openclaw_home.clone(),
-        }
-    }
-
-    /// 使用默认配置创建（向后兼容）
-    pub fn new() -> Self {
-        Self {
-            service_name: "openclaw-gateway".to_string(),
-            health_port: 18790,
-            health_timeout: Duration::from_secs(30),
-            openclaw_home: "~/.openclaw".to_string(),
         }
     }
 
@@ -122,7 +128,6 @@ impl RuntimeManager {
 
         if output.status.success() {
             String::from_utf8_lossy(&output.stdout)
-                .trim()
                 .split_whitespace()
                 .next()
                 .and_then(|s| s.parse::<u32>().ok())
@@ -408,6 +413,12 @@ pub trait Runtime: Send + Sync {
 /// OpenClaw 运行时适配器
 pub struct OpenClawRuntime {
     manager: RuntimeManager,
+}
+
+impl Default for OpenClawRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OpenClawRuntime {

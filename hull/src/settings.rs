@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// 应用配置
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct Settings {
     /// 服务器配置
     #[serde(default)]
@@ -146,17 +146,6 @@ impl Default for FeaturesConfig {
             auto_backup: true,
             safe_mode: true,
             first_run_wizard: true,
-        }
-    }
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            openclaw: OpenClawConfig::default(),
-            paths: PathsConfig::default(),
-            features: FeaturesConfig::default(),
         }
     }
 }

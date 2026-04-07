@@ -110,22 +110,22 @@ pub async fn save_provider(
     {
         Ok(Some(commit_id)) => {
             tracing::info!("Provider saved successfully with commit: {}", commit_id);
-            return Ok(Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "success": true,
                 "provider_id": provider_id,
                 "commit": commit_id,
-            })));
+            })))
         }
         Ok(None) => {
             tracing::info!("Provider saved successfully (no changes)");
-            return Ok(Json(serde_json::json!({
+            Ok(Json(serde_json::json!({
                 "success": true,
                 "provider_id": provider_id,
-            })));
+            })))
         }
         Err(e) => {
             tracing::error!("sync_to_version_config failed: {}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -145,18 +145,14 @@ pub async fn delete_provider(
         .sync_to_version_config(&config, Some(commit_msg))
         .await
     {
-        Ok(Some(commit_id)) => {
-            return Ok(Json(serde_json::json!({
-                "success": true,
-                "commit": commit_id,
-            })));
-        }
-        Ok(None) => {
-            return Ok(Json(serde_json::json!({"success": true})));
-        }
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
+        Ok(None) => Ok(Json(serde_json::json!({"success": true}))),
         Err(e) => {
             tracing::error!("sync_to_version_config failed: {}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -200,18 +196,14 @@ pub async fn save_model_priority(
         .sync_to_version_config(&config, Some("Update model priority".to_string()))
         .await
     {
-        Ok(Some(commit_id)) => {
-            return Ok(Json(serde_json::json!({
-                "success": true,
-                "commit": commit_id,
-            })));
-        }
-        Ok(None) => {
-            return Ok(Json(serde_json::json!({"success": true})));
-        }
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
+        Ok(None) => Ok(Json(serde_json::json!({"success": true}))),
         Err(e) => {
             tracing::error!("sync_to_version_config failed: {}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }

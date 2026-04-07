@@ -1,4 +1,3 @@
-use crate::error::Result;
 use serde_json::Value;
 
 /// 配置验证错误
@@ -14,6 +13,12 @@ pub struct ValidationResult {
     pub valid: bool,
     pub errors: Vec<ValidationError>,
     pub warnings: Vec<ValidationError>,
+}
+
+impl Default for ValidationResult {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ValidationResult {

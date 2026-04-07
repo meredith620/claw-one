@@ -27,19 +27,17 @@ pub async fn save_agents(
         .sync_to_version_config(&config, Some("Update agent config".to_string()))
         .await
     {
-        Ok(Some(commit_id)) => {
-            return Ok(Json(serde_json::json!({
-                "success": true,
-                "commit": commit_id,
-            })));
-        }
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
         Ok(None) => {
             // 没有变更需要提交
-            return Ok(Json(serde_json::json!({"success": true})));
+            Ok(Json(serde_json::json!({"success": true})))
         }
         Err(e) => {
             tracing::error!("Git sync_to_version_config failed: {}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }

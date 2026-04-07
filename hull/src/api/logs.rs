@@ -41,7 +41,7 @@ async fn get_logs_from_file(limit: usize) -> Result<String> {
 
     let content = fs::read_to_string(&log_path)
         .await
-        .map_err(|e| crate::error::AppError::Io(e))?;
+        .map_err(crate::error::AppError::Io)?;
 
     // 只返回最后 limit 行
     let lines: Vec<&str> = content.lines().collect();
