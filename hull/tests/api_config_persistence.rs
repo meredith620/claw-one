@@ -162,7 +162,8 @@ async fn test_channels_config_file_content_matches_api_save() {
     let channels_config = serde_json::json!({
         "mattermost": {
             "enabled": true,
-            "dmPolicy": "allow"
+            "dmPolicy": "allow",
+            "accounts": {}
         }
     });
 

@@ -47,7 +47,8 @@ fn get_test_modules() -> Vec<(
             serde_json::json!({
                 "mattermost": {
                     "enabled": true,
-                    "dmPolicy": "allow"
+                    "dmPolicy": "allow",
+                    "accounts": {}
                 }
             }),
             |file_json: &serde_json::Value| file_json.get("channels"),
