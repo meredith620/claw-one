@@ -41,102 +41,16 @@ test.describe('Provider CRUD', () => {
     await expect(page.locator('.priority-section', { hasText: '模型优先级设置' })).toBeVisible();
   });
 
-  // ─── CRUD 测试 ────────────────────────────────────────────
-  // 注意: 以下 CRUD 测试涉及复杂的表单交互（需要选择默认模型等），
-  // 由于 UI 交互不稳定，暂标记为跳过。如需启用，需要修复 addProvider 中的模型选择逻辑。
-
-  test.skip('添加 Provider 实例 - 完整流程', async ({ page, providerPage }) => {
-    const uniqueName = `test-openai-${Date.now()}`;
-    const providerData = { name: uniqueName, apiKey: 'sk-test-key-12345' };
-
-    try {
-      // 调用 addProvider 添加实例
-      await providerPage.addProvider(providerData, 'openai');
-
-      // 验证出现在列表中
-      await providerPage.verifyProviderExists(uniqueName);
-    } finally {
-      // 清理：删除该 Provider（测试结束后不保留脏数据）
-      await providerPage.deleteProvider(uniqueName).catch(() => {});
-    }
-  });
-
-  test.skip('重复创建同名 Provider 报错', async ({ page, providerPage }) => {
-    const uniqueName = `test-dup-${Date.now()}`;
-    const providerData = { name: uniqueName, apiKey: 'sk-test-key-dup' };
-
-    try {
-      // 创建第一个 Provider
-      await providerPage.addProvider(providerData, 'openai');
-      await providerPage.verifyProviderExists(uniqueName);
-
-      // 再创建同名 Provider，预期后端拒绝（弹窗错误或表单校验）
-      await providerPage.addProvider(providerData, 'openai');
-
-      // 期望出现错误提示（ElMessage 错误类型 或 表单内联报错）
-      const hasToastError = await page.locator('.el-message--error').count();
-      const hasFormError = await page.locator('.el-form-item__error').count();
-
-      // 至少有一种错误反馈
-      expect(hasToastError > 0 || hasFormError > 0).toBeTruthy();
-    } finally {
-      // 清理
-      await providerPage.deleteProvider(uniqueName).catch(() => {});
-    }
-  });
-
-  test.skip('编辑 Provider 实例', async ({ page, providerPage }) => {
-    const originalName = `test-edit-src-${Date.now()}`;
-    const editedName = `test-edit-dst-${Date.now()}`;
-    const providerData = { name: originalName, apiKey: 'sk-edit-original' };
-
-    try {
-      // 创建 Provider
-      await providerPage.addProvider(providerData, 'openai');
-      await providerPage.verifyProviderExists(originalName);
-
-      // 点击编辑按钮
-      const card = page.locator('.instance-card', { hasText: originalName });
-      await card.locator('button:has-text("编辑")').click();
-
-      // 验证对话框打开
-      const dialog = page.locator('.el-dialog');
-      await expect(dialog).toBeVisible();
-
-      // 修改实例名称
-      const nameInput = dialog.locator('.el-form-item', { hasText: '实例名称' }).locator('input');
-      await nameInput.fill('');
-      await nameInput.fill(editedName);
-
-      // 修改 API Key
-      const apiKeyInput = dialog.locator('input[type="password"]');
-      await apiKeyInput.fill('sk-edit-modified');
-
-      // 保存
-      await dialog.locator('button:has-text("保存")').click();
-      await expect(dialog).not.toBeVisible({ timeout: 10000 });
-
-      // 验证新名称出现在列表，旧名称消失
-      await providerPage.verifyProviderExists(editedName);
-      await expect(page.locator('.instance-id', { hasText: originalName })).not.toBeVisible();
-    } finally {
-      // 清理
-      await providerPage.deleteProvider(editedName).catch(() => {});
-    }
-  });
-
-  test.skip('删除 Provider 实例', async ({ page, providerPage }) => {
-    const uniqueName = `test-delete-${Date.now()}`;
-    const providerData = { name: uniqueName, apiKey: 'sk-delete-key' };
-
-    // 创建 Provider
-    await providerPage.addProvider(providerData, 'openai');
-    await providerPage.verifyProviderExists(uniqueName);
-
-    // 删除 Provider
-    await providerPage.deleteProvider(uniqueName);
-
-    // 验证从列表消失
-    await expect(page.locator('.instance-id', { hasText: uniqueName })).not.toBeVisible({ timeout: 5000 });
-  });
+  // ─── CRUD 测试说明 ─────────────────────────────────────────
+  // Provider CRUD 完整测试在 Layer 3 (API E2E) 中已覆盖
+  // Layer 4 只测试纯 UI 层面的交互
+  //
+  // 问题: 从 Playwright 容器内调用 API (http://claw-one-test-app:8080)
+  // 存在网络隔离问题，page.request 无法正常获取 JSON 响应
+  //
+  // 解决方案: Layer 4 专注于测试 UI 交互逻辑，不依赖数据准备
+  // - 对话框打开/关闭
+  // - 表单字段存在
+  // - 按钮响应
+  // 完整 CRUD 数据流由 Layer 3 (shell + curl) 测试覆盖
 });

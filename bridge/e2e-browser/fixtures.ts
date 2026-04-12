@@ -102,7 +102,7 @@ export class ProviderPage extends ConfigPage {
   }
 
   async verifyProviderExists(name: string) {
-    await expect(this.page.locator('.instance-id', { hasText: name }).first()).toBeVisible();
+    await expect(this.page.locator('.instance-card', { hasText: name }).first()).toBeVisible();
   }
 
   async deleteProvider(name: string) {
