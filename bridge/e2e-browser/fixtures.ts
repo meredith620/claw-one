@@ -3,7 +3,9 @@
  * 用于 Playwright 前端 E2E 测试
  */
 
-import { test as base, expect, Page } from '@playwright/test';
+import { test as base, expect, Page, request } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // 测试数据生成器
 export const testData = {
@@ -266,5 +268,97 @@ export const test = base.extend<{
     await use(new MemoryPage(page));
   },
 });
+
+// ─── 配置验证工具 ────────────────────────────────────────────────────────────
+
+/**
+ * OpenClaw 配置验证工具
+ * 用于验证 UI 操作后 openclaw.json 文件内容是否符合预期
+ * 
+ * openclaw-config volume 挂载到 /app/openclaw-config
+ * 文件实际路径: /app/openclaw-config/openclaw.json
+ */
+export class ConfigVerifier {
+  // openclaw.json 在 Playwright 容器内的路径
+  private static readonly CONFIG_PATH = '/app/openclaw-config/openclaw.json';
+
+  /**
+   * 读取并解析 openclaw.json
+   */
+  static async readConfig(): Promise<any> {
+    try {
+      console.log('[ConfigVerifier] Reading config from:', this.CONFIG_PATH);
+      const content = fs.readFileSync(this.CONFIG_PATH, 'utf-8');
+      const config = JSON.parse(content);
+      console.log('[ConfigVerifier] Config loaded successfully, keys:', Object.keys(config));
+      return config;
+    } catch (e) {
+      console.error('[ConfigVerifier] Failed to read openclaw.json:', e);
+      return null;
+    }
+  }
+
+  /**
+   * 验证 channel 账号是否存在于 openclaw.json
+   */
+  static async verifyChannelExists(channelId: string, expectedData?: Partial<{
+    name: string;
+    botToken: string;
+    baseUrl: string;
+  }>): Promise<boolean> {
+    const config = await this.readConfig();
+    if (!config) {
+      console.log('[ConfigVerifier] No config, returning false');
+      return false;
+    }
+
+    console.log('[ConfigVerifier] Looking for channel:', channelId);
+    console.log('[ConfigVerifier] Channel types to search:', ['mattermost', 'feishu', 'ding', 'lark']);
+
+    // 遍历所有 channel 类型查找账号
+    for (const channelType of ['mattermost', 'feishu', 'ding', 'lark']) {
+      const channelConfig = config[channelType];
+      console.log(`[ConfigVerifier] Checking ${channelType}:`, channelConfig ? 'exists' : 'not found');
+      if (channelConfig?.accounts?.[channelId]) {
+        console.log(`[ConfigVerifier] Found ${channelId} in ${channelType}`);
+        if (!expectedData) return true;
+        
+        const account = channelConfig.accounts[channelId];
+        if (expectedData.name && account.name !== expectedData.name) return false;
+        if (expectedData.botToken && account.botToken !== expectedData.botToken) return false;
+        if (expectedData.baseUrl && account.baseUrl !== expectedData.baseUrl) return false;
+        return true;
+      }
+    }
+    console.log('[ConfigVerifier] Channel not found');
+    return false;
+  }
+
+  /**
+   * 验证 channel 账号是否已从 openclaw.json 中删除
+   */
+  static async verifyChannelDeleted(channelId: string): Promise<boolean> {
+    const exists = await this.verifyChannelExists(channelId);
+    return !exists;
+  }
+
+  /**
+   * 验证 provider 是否存在于 openclaw.json
+   */
+  static async verifyProviderExists(providerId: string): Promise<boolean> {
+    const config = await this.readConfig();
+    if (!config) return false;
+    return !!config.providers?.[providerId];
+  }
+
+  /**
+   * 验证 agent 配置是否存在
+   */
+  static async verifyAgentExists(agentId: string): Promise<boolean> {
+    const config = await this.readConfig();
+    if (!config) return false;
+    return !!config.agents?.[agentId];
+  }
+}
 
 export { expect };

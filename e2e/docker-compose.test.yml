@@ -6,13 +6,13 @@ services:
     user: "0:0"  # 以 root 用户运行避免权限问题
     restart: unless-stopped  # 自动重启
     ports:
-      - "28789:18789"  # 非标准端口，避免冲突
+      - "28789:18790"  # 映射到实际的 gateway 端口 18790
     volumes:
       - openclaw-config:/root/.openclaw:rw  # 使用 root 用户目录
     networks:
       - claw-one-test-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18789/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:18790/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -50,8 +50,9 @@ services:
     depends_on:
       claw-one:
         condition: service_started
-    # 可以选择将测试报告复制到主机
+    # 挂载 openclaw 配置目录到容器内，用于验证 openclaw.json 内容
     volumes:
+      - openclaw-config:/app/openclaw-config:ro
       - ./playwright-report:/app/playwright-report
       - ./test-results:/app/test-results
 
