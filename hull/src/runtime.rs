@@ -89,6 +89,13 @@ impl RuntimeManager {
 
     /// 重启 OpenClaw 服务
     pub async fn restart(&self) -> Result<()> {
+        // 检测运行环境，选择合适的重启方式
+        if self.is_in_docker().await {
+            // 在 Docker 容器中，使用 docker restart
+            return self.docker_restart().await;
+        }
+
+        // 传统 systemd 环境
         // 获取当前进程 PID（用于后续判断重启是否完成）
         let old_pid = self.get_process_pid().await;
 
@@ -115,6 +122,90 @@ impl RuntimeManager {
         }
 
         // 超时但继续返回成功，让上层通过健康检查确认状态
+        Ok(())
+    }
+
+    /// 检测是否在 Docker 容器中运行
+    async fn is_in_docker(&self) -> bool {
+        // 检查 /.dockerenv 文件
+        if std::path::Path::new("/.dockerenv").exists() {
+            return true;
+        }
+
+        // 检查 container 环境变量
+        if std::env::var("CONTAINER").is_ok() {
+            return true;
+        }
+
+        // 检查 cgroup 信息
+        let output = Command::new("cat")
+            .arg("/proc/1/cgroup")
+            .output()
+            .ok();
+        if let Some(output) = output {
+            let cgroup = String::from_utf8_lossy(&output.stdout);
+            if cgroup.contains("docker") || cgroup.contains("containerd") {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// 在 Docker 容器中重启服务
+    async fn docker_restart(&self) -> Result<()> {
+        // 检查 docker CLI 是否可用
+        let docker_exists = Command::new("which")
+            .arg("docker")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !docker_exists {
+            // Docker CLI 不可用，可能是非特权容器或测试环境
+            // 记录警告并返回成功，让外部处理重启
+            eprintln!("[RuntimeManager] docker not available, skipping container restart");
+            return Ok(());
+        }
+
+        // 获取当前容器名称或 ID
+        let container_id = std::env::var("HOSTNAME").unwrap_or_else(|_| {
+            // 尝试从 cgroup 获取容器 ID
+            let output = Command::new("cat")
+                .arg("/proc/1/cgroup")
+                .output();
+            if let Ok(output) = output {
+                let cgroup = String::from_utf8_lossy(&output.stdout);
+                // cgroup 格式类似: 12:devices:/docker/abc123def456
+                for line in cgroup.lines() {
+                    if line.contains("/docker/") {
+                        if let Some(id) = line.split("/docker/").last() {
+                            return id.trim().to_string();
+                        }
+                    }
+                }
+            }
+            "".to_string()
+        });
+
+        if container_id.is_empty() {
+            return Err(AppError::Runtime("Cannot determine container ID for restart".to_string()));
+        }
+
+        // 使用 docker restart 重启容器
+        let output = Command::new("docker")
+            .args(["restart", &container_id])
+            .output()
+            .map_err(|e| AppError::Runtime(format!("Failed to restart docker container: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(AppError::Runtime(format!("docker restart failed: {}", stderr)));
+        }
+
+        // 等待服务重新健康
+        // 注意：docker restart 是异步的，容器会自行重启
+        tokio::time::sleep(Duration::from_secs(2)).await;
         Ok(())
     }
 

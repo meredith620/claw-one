@@ -448,6 +448,12 @@ impl ConfigManager {
         self.sync_to_version_config(&config, Some("Reset to factory settings".to_string()))
             .await?;
 
+        // 删除初始化标记，让用户回到首次配置状态
+        let init_flag = self.git_dir.join(INIT_FLAG_FILE);
+        if init_flag.exists() {
+            fs::remove_file(&init_flag).await?;
+        }
+
         Ok(config)
     }
 
