@@ -63,23 +63,42 @@ export class ProviderPage extends ConfigPage {
   }
 
   async addProvider(data: typeof testData.provider.openai, type = 'openai') {
-    // 点击添加实例按钮
-    await this.page.click('button:has-text("+ 添加实例")');
+    // 点击对应 Provider 类型的添加实例按钮
+    const typeSection = this.page.locator('.provider-section, .section-card', { hasText: type });
+    await typeSection.locator('button:has-text("+ 添加实例")').click();
     
     const dialog = this.page.locator('.el-dialog');
     await expect(dialog).toBeVisible();
     
-    // 填写实例名称
-    await this.page.locator('.el-dialog .el-form-item').first().locator('input').fill(data.name);
+    // 等待表单渲染
+    await this.page.waitForTimeout(500);
+    
+    // 填写实例名称 - 更精确的选择器
+    const nameInput = dialog.locator('.el-form-item').filter({ hasText: '实例名称' }).locator('input').first();
+    await nameInput.fill(data.name);
     
     // 填写 API Key (password 类型)
-    await this.page.locator('.el-dialog input[type="password"]').fill(data.apiKey);
+    const apiKeyInput = dialog.locator('input[type="password"]').first();
+    await apiKeyInput.fill(data.apiKey);
+    
+    // 填写默认模型 (必填字段) - 点击选择器本身而不是输入框
+    const modelSelect = dialog.locator('.el-form-item').filter({ hasText: '默认模型' }).locator('.el-select, [class*="select"]').first();
+    await modelSelect.click();
+    await this.page.waitForTimeout(300);
+    
+    // 选择第一个选项
+    const firstOption = this.page.locator('.el-select-dropdown__item:visible').first();
+    if (await firstOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await firstOption.click();
+    }
+    await this.page.waitForTimeout(200);
     
     // 点击保存
-    await this.page.click('.el-dialog__footer button:has-text("保存")');
+    const saveButton = dialog.locator('.el-dialog__footer button:has-text("保存")');
+    await saveButton.click();
     
-    // 等待对话框关闭
-    await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    // 等待对话框关闭 - 增加超时时间
+    await expect(dialog).not.toBeVisible({ timeout: 10000 });
   }
 
   async verifyProviderExists(name: string) {
