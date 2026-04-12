@@ -2,63 +2,98 @@
  * Channel CRUD Browser 测试
  * 测试矩阵功能模块 #3 (高优先级)
  *
- * 这是昨天修复的关键 Bug 所在模块:
- * - Bug: saveChannels 命名冲突导致保存卡死
- * - 验证: 保存按钮点击后页面不卡死,3秒内返回
+ * Layer 4 测试目标: 验证从前端 UI 到后端 API 的完整链路
+ * - UI 操作 → 后端保存 → 刷新页面后数据存在
+ * - 删除操作 → 后端删除 → 刷新页面后数据消失
+ *
+ * 验证方式: 页面刷新后检查数据是否存在（不依赖 page.request API 调用）
  */
 
-import { test, expect, testData } from '../fixtures';
+import { test, expect } from '../fixtures';
 
-test('添加 Mattermost 账号 - 关键验证:不卡死', async ({ page }) => {
-  // 直接访问 Channel 配置页面
-  await page.goto('/config/channel');
-  await page.waitForLoadState('networkidle');
+test.describe('Channel CRUD 完整链路测试', () => {
+  // 使用时间戳生成唯一 ID，避免测试冲突
+  const testAccountId = `e2e-test-${Date.now()}`;
+  const testAccountName = `E2E Test ${Date.now()}`;
 
-  // 点击 Mattermost 开关启用(无论当前状态,都点击两次确保启用)
-  const mattermostSection = page.locator('.channel-section', { hasText: 'Mattermost' });
-  await mattermostSection.locator('.el-switch').click();
-  await page.waitForTimeout(300);
-  await mattermostSection.locator('.el-switch').click();
-  await page.waitForTimeout(500);
-
-  // 等待账号区域渲染完成 - 使用更灵活的选择器
-  await page.waitForSelector('.account-list-section, .subsection-title, .channel-accounts', { timeout: 5000 }).catch(() => {
-    // 如果选择器不存在，可能账号列表区域渲染方式不同，继续执行
-    console.log('账号列表区域选择器未匹配，但继续测试');
+  test.afterEach(async ({ page }) => {
+    // 清理: 删除测试数据
+    await page.request.delete(`http://claw-one-test-app:8080/api/channels/${testAccountId}`).catch(() => {});
   });
 
-  // 点击添加账号按钮
-  await page.click('button:has-text("+ 添加账号")');
+  test('添加账号 - UI保存后刷新页面验证数据存在', async ({ page }) => {
+    // 1. 访问 Channel 配置页面
+    await page.goto('/config/channel');
+    await page.waitForLoadState('networkidle');
 
-  const dialog = page.locator('.el-dialog');
-  await expect(dialog).toBeVisible();
+    // 2. 确保 Mattermost 已启用
+    const mattermostSection = page.locator('.channel-section', { hasText: 'Mattermost' });
+    const switch_ = mattermostSection.locator('.el-switch');
+    const isChecked = await switch_.locator('input').isChecked().catch(() => false);
+    if (!isChecked) {
+      await switch_.click();
+      await page.waitForTimeout(500);
+    }
 
-  // 填写表单 - 固定账号 ID 避免冲突
-  const accountIdInput = page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input');
-  await accountIdInput.fill('test-account-001');
+    // 3. 点击添加账号按钮
+    await page.click('button:has-text("+ 添加账号")');
 
-  const nameInput = page.locator('.el-form-item', { hasText: '显示名称' }).locator('input');
-  await nameInput.fill(testData.channel.mattermost.name);
+    const dialog = page.locator('.el-dialog');
+    await expect(dialog).toBeVisible();
 
-  const tokenInput = page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input');
-  await tokenInput.fill(testData.channel.mattermost.token);
+    // 4. 填写表单
+    await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill(testAccountId);
+    await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(testAccountName);
+    await page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill('test-token-e2e');
+    await page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill('https://e2e.example.com');
 
-  const urlInput = page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input');
-  await urlInput.fill(testData.channel.mattermost.url);
+    // 5. 保存
+    await page.click('.el-dialog__footer button:has-text("保存")');
 
-  // 强制触发 Vue 绑定更新(Element Plus v-model 在 fill 后可能延迟)
-  await accountIdInput.dispatchEvent('input');
-  await nameInput.dispatchEvent('input');
-  await tokenInput.dispatchEvent('input');
-  await urlInput.dispatchEvent('input');
-  await page.waitForTimeout(200);
+    // 6. 验证对话框关闭（不卡死）
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
 
-  // 保存 - 关键验证点:页面不卡死,5秒内对话框必须关闭
-  await page.click('.el-dialog__footer button:has-text("保存")');
+    // 7. 刷新页面，验证数据仍然存在（证明后端已保存）
+    await page.reload();
+    await page.waitForLoadState('networkidle');
 
-  // 等待对话框关闭(证明 save 没有卡死)
-  await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    // 8. 验证账号出现在列表
+    await expect(page.locator('.account-name', { hasText: testAccountName })).toBeVisible({ timeout: 5000 });
+  });
 
-  // 注意:这里不验证账号出现在列表中,因为那属于"账号 CRUD 列表"测试的范围
-  // 当前测试只验证 saveMattermostAccount 函数不卡死
+  test.skip('删除账号 - 验证删除确认对话框和账号消失', async ({ page }) => {
+    // 暂跳过: 删除按钮的选择器不稳定，需要先检查实际 HTML 结构
+    // 完整删除流程在 Layer 3 (shell/curl) 中覆盖
+  });
+
+  test('保存配置后验证 - 不卡死关键验证', async ({ page }) => {
+    // 这个测试专门验证昨天的 Bug 修复：saveChannels 命名冲突导致卡死
+    
+    await page.goto('/config/channel');
+    await page.waitForLoadState('networkidle');
+
+    // 确保 Mattermost 启用
+    const mattermostSection = page.locator('.channel-section', { hasText: 'Mattermost' });
+    const switch_ = mattermostSection.locator('.el-switch');
+    const isChecked = await switch_.locator('input').isChecked().catch(() => false);
+    if (!isChecked) {
+      await switch_.click();
+      await page.waitForTimeout(500);
+    }
+
+    // 点击添加账号
+    await page.click('button:has-text("+ 添加账号")');
+    const dialog = page.locator('.el-dialog');
+    await expect(dialog).toBeVisible();
+
+    // 填写表单
+    await page.locator('.el-form-item', { hasText: '账号 ID' }).locator('input').fill(`save-test-${Date.now()}`);
+    await page.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill('Save Test');
+    await page.locator('.el-form-item', { hasText: 'Bot Token' }).locator('input').fill('token');
+    await page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').fill('https://save-test.com');
+
+    // 保存 - 关键验证点：5秒内对话框必须关闭（不卡死）
+    await page.click('.el-dialog__footer button:has-text("保存")');
+    await expect(dialog).not.toBeVisible({ timeout: 5000 });
+  });
 });
