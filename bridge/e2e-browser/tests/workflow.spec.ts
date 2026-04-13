@@ -35,7 +35,11 @@ async function verifyChannelViaAPI(channelId: string, expectedData?: { name?: st
  * 通过 API 删除 channel 账号
  */
 async function deleteChannelViaAPI(channelId: string): Promise<void> {
-  await fetch(`${API_BASE}/api/channels/${channelId}`, { method: 'DELETE' }).catch(() => {});
+  // Channel DELETE API 路径是 /api/channels/:type/:id
+  // 遍历所有 channel type 尝试删除
+  for (const type of ['mattermost', 'feishu', 'ding', 'lark']) {
+    await fetch(`${API_BASE}/api/channels/${type}/${channelId}`, { method: 'DELETE' }).catch(() => {});
+  }
 }
 
 test.describe('User Workflows', () => {

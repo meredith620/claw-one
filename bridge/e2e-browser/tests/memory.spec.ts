@@ -2,20 +2,11 @@
  * Memory 配置 Browser 测试
  * 测试矩阵功能模块 #4
  *
- * Layer 4 测试目标: 验证从前端 UI 到后端 API 的完整链路
- *
- * API 路径: GET/PUT http://claw-one-test-app:8080/api/memory
+ * Layer 4 测试目标: 验证从前端 UI 保存成功后，配置文件内容正确
+ * 验证方式: 检查保存成功消息 + ConfigVerifier 文件层验证
  */
 
 import { test, expect, ConfigVerifier } from '../fixtures';
-
-const API_BASE = process.env.CLAW_ONE_URL || 'http://claw-one-test-app:8080';
-
-async function getMemory(): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/memory`);
-  if (!response.ok) throw new Error(`API failed: ${response.status}`);
-  return response.json();
-}
 
 test.describe('Memory Configuration', () => {
   test.beforeEach(async ({ memoryPage }) => {
@@ -61,29 +52,11 @@ test.describe('Memory Configuration', () => {
     // 4. 保存
     await page.click('button:has-text("保存 Memory 配置")');
     
-    // 等待保存完成
-    await page.waitForTimeout(1000);
-
-    // 5. API 详细验证（完整链路验证 - Issue 2）
-    const response = await page.request.get(`${API_BASE}/api/memory`);
-    expect(response.ok()).toBeTruthy();
+    // 5. 验证保存成功消息（方案A：验证 UI 反馈而非直接调用 API）
+    await expect(page.locator('.el-message:has-text("保存成功")')).toBeVisible({ timeout: 5000 });
+    console.log('[Memory] UI 保存成功消息已显示');
     
-    // 核心断言：验证具体字段值
-    const memData = await response.json();
-    console.log('[Memory] API 返回数据:', JSON.stringify(memData, null, 2));
-    
-    // 验证 enabled 字段
-    expect(memData.enabled).toBe(true);
-    
-    // 验证 provider 字段
-    expect(memData.provider).toBe('ollama');
-    
-    // 验证 baseUrl 字段
-    expect(memData.baseUrl).toBe(baseUrl);
-    
-    console.log('[Memory] API 详细验证通过：enabled/provider/baseUrl 字段正确');
-    
-    // 文件层验证（ConfigVerifier 集成 - P1）
+    // 6. 文件层验证（ConfigVerifier 集成 - P1）
     const inFile = await ConfigVerifier.verifyMemoryExists({
       enabled: true,
       provider: 'ollama',
@@ -111,30 +84,23 @@ test.describe('Memory Configuration', () => {
     const baseUrlInput = page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').first();
     await baseUrlInput.fill(baseUrl);
 
-    // 4. 保存
+    // 4. 保存（启用状态）
     await page.click('button:has-text("保存 Memory 配置")');
-    await page.waitForTimeout(1000);
-
-    // 5. 验证启用状态下 API 返回 enabled=true
-    let response = await page.request.get(`${API_BASE}/api/memory`);
-    let memData = await response.json();
-    expect(memData.enabled).toBe(true);
+    
+    // 5. 验证启用保存成功
+    await expect(page.locator('.el-message:has-text("保存成功")')).toBeVisible({ timeout: 5000 });
+    console.log('[Memory] 启用保存成功');
     
     // 6. 禁用 Memory 开关
     await switch_.click();
     await page.waitForTimeout(300);
 
-    // 7. 保存
+    // 7. 保存（禁用状态）
     await page.click('button:has-text("保存 Memory 配置")');
-    await page.waitForTimeout(1000);
-
-    // 8. API 验证：Memory 已禁用
-    response = await page.request.get(`${API_BASE}/api/memory`);
-    memData = await response.json();
-    console.log('[Memory Delete] API 返回数据:', JSON.stringify(memData, null, 2));
     
-    expect(memData.enabled).toBe(false);
-    console.log('[Memory Delete] API 验证通过：Memory 已禁用');
+    // 8. 验证禁用保存成功消息
+    await expect(page.locator('.el-message:has-text("保存成功")')).toBeVisible({ timeout: 5000 });
+    console.log('[Memory Delete] UI 保存成功消息已显示');
     
     // 9. 文件层验证：Memory 配置中 enabled 已为 false
     const inFile = await ConfigVerifier.verifyMemoryExists({

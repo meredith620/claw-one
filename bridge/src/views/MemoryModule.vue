@@ -121,7 +121,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
-import { getMemory, saveMemory } from '../api'
+import { getMemory, saveMemory as saveMemoryApi } from '../api'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -156,7 +156,17 @@ const loadData = async () => {
     if (data === null || data === undefined) {
       Object.assign(memoryConfig, { enabled: false })
     } else {
-      Object.assign(memoryConfig, { ...defaultConfig, ...data })
+      // 兼容处理：后端可能返回扁平格式 { baseUrl } 或嵌套格式 { remote: { baseUrl } }
+      const normalizedData = { ...data }
+      if (normalizedData.baseUrl && !normalizedData.remote) {
+        normalizedData.remote = { baseUrl: normalizedData.baseUrl }
+        delete normalizedData.baseUrl
+      }
+      if (normalizedData.apiKey && normalizedData.remote && !normalizedData.remote.apiKey) {
+        normalizedData.remote.apiKey = normalizedData.apiKey
+        delete normalizedData.apiKey
+      }
+      Object.assign(memoryConfig, { ...defaultConfig, ...normalizedData })
     }
     // 确保嵌套对象存在
     if (!memoryConfig.remote) memoryConfig.remote = { baseUrl: 'http://localhost:11434' }
@@ -188,10 +198,29 @@ const onHybridChange = () => {
   onChange()
 }
 
-const saveMemoryConfig = async () => {
+const saveMemory = async () => {
   saving.value = true
   try {
-    await saveMemory({ ...memoryConfig })
+    // 构造发送到后端的数据格式：扁平结构 { enabled, provider, baseUrl, ... }
+    const payload: any = {
+      enabled: memoryConfig.enabled,
+      provider: memoryConfig.provider,
+      model: memoryConfig.model,
+    }
+    // 根据 provider 添加对应的远程配置
+    if (memoryConfig.provider === 'ollama') {
+      payload.baseUrl = memoryConfig.remote?.baseUrl || 'http://localhost:11434'
+    } else if (memoryConfig.provider === 'openai') {
+      payload.apiKey = memoryConfig.remote?.apiKey || ''
+    }
+    // 高级功能配置
+    if (memoryConfig.store) {
+      payload.store = memoryConfig.store
+    }
+    if (memoryConfig.query) {
+      payload.query = memoryConfig.query
+    }
+    await saveMemoryApi(payload)
     ElMessage.success('保存成功')
     hasChanges.value = false
   } catch (error: any) {

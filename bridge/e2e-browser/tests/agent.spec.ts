@@ -133,9 +133,9 @@ test.describe('Agent Configuration', () => {
       // 等待确认对话框出现
       await dialogPromise;
       
-      // 点击确定按钮
+      // 点击 OK 按钮
       await page.locator('.el-message-box__wrapper button, .el-message-box button')
-        .filter({ hasText: '确定' })
+        .filter({ hasText: 'OK' })
         .click();
       
       await page.waitForTimeout(1000);
