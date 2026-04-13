@@ -84,8 +84,12 @@ test.describe('Memory Configuration', () => {
     console.log('[Memory] API 详细验证通过：enabled/provider/baseUrl 字段正确');
     
     // 文件层验证（ConfigVerifier 集成 - P1）
-    const inFile = await ConfigVerifier.verifyMemoryExists();
+    const inFile = await ConfigVerifier.verifyMemoryExists({
+      enabled: true,
+      provider: 'ollama',
+      baseUrl: baseUrl
+    });
     expect(inFile).toBeTruthy();
-    console.log('[Memory] ConfigVerifier 文件验证通过：memory 配置存在于 openclaw.json');
+    console.log('[Memory] ConfigVerifier 文件验证通过：enabled/provider/baseUrl 字段匹配');
   });
 });

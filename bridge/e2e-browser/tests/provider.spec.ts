@@ -99,9 +99,9 @@ test.describe('Provider CRUD', () => {
       console.log('[Provider] API 详细验证通过：实例名称和字段正确');
       
       // 文件层验证（ConfigVerifier 集成 - P1）
-      const inFile = await ConfigVerifier.verifyProviderExists(uniqueName);
+      const inFile = await ConfigVerifier.verifyProviderExists(uniqueName, { name: uniqueName });
       expect(inFile).toBeTruthy();
-      console.log('[Provider] ConfigVerifier 文件验证通过：实例存在于 openclaw.json');
+      console.log('[Provider] ConfigVerifier 文件验证通过：实例名称字段匹配');
     } finally {
       // 清理 - 使用精确的时间戳匹配
       const providers = await getProviders();

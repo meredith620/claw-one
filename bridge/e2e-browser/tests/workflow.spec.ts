@@ -11,6 +11,26 @@ import { test, expect, ConfigVerifier } from '../fixtures';
 
 const API_BASE = 'http://claw-one-test-app:8080';
 
+async function getChannelConfig(): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/channels`);
+  if (!response.ok) throw new Error(`API failed: ${response.status}`);
+  return response.json();
+}
+
+async function verifyChannelViaAPI(channelId: string, expectedData?: { name?: string }): Promise<boolean> {
+  const config = await getChannelConfig();
+  for (const channelType of ['mattermost', 'feishu', 'ding', 'lark']) {
+    const channelConfig = config[channelType];
+    if (!channelConfig?.accounts) continue;
+    if (channelConfig.accounts[channelId]) {
+      if (!expectedData) return true;
+      const account = channelConfig.accounts[channelId];
+      return account.name === expectedData.name;
+    }
+  }
+  return false;
+}
+
 /**
  * 通过 API 删除 channel 账号
  */
@@ -79,25 +99,15 @@ test.describe('User Workflows', () => {
       // 使用 .first() 避免 strict mode violation
       await expect(page.locator('.account-name', { hasText: testChannelName }).first()).toBeVisible();
       
-      // 通过 API 验证数据已保存（完整链路验证）
-      const apiResponse = await page.request.get(`${API_BASE}/api/channels`);
-      expect(apiResponse.ok()).toBeTruthy();
-      const channels = await apiResponse.json();
-      
-      let found = false;
-      for (const type of ['mattermost', 'feishu', 'ding', 'lark']) {
-        if (channels[type]?.accounts?.[testChannelId]) {
-          found = true;
-          expect(channels[type].accounts[testChannelId].name).toBe(testChannelName);
-          break;
-        }
-      }
-      expect(found).toBeTruthy();
+      // API 层验证（完整链路验证）
+      const channelExists = await verifyChannelViaAPI(testChannelId, { name: testChannelName });
+      expect(channelExists).toBeTruthy();
+      console.log('[Workflow Channel] API 验证通过：账号数据存在');
       
       // 文件层验证（ConfigVerifier 集成 - P2）
       const inFile = await ConfigVerifier.verifyChannelExists(testChannelId, { name: testChannelName });
       expect(inFile).toBeTruthy();
-      console.log('[Workflow Channel] ConfigVerifier 文件验证通过：账号存在于 openclaw.json');
+      console.log('[Workflow Channel] ConfigVerifier 文件验证通过：账号 name 字段匹配');
     } finally {
       await deleteChannelViaAPI(testChannelId);
     }

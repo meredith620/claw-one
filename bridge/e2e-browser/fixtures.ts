@@ -345,28 +345,104 @@ export class ConfigVerifier {
   /**
    * 验证 provider 是否存在于 openclaw.json
    */
-  static async verifyProviderExists(providerId: string): Promise<boolean> {
+  static async verifyProviderExists(providerId: string, expectedData?: Partial<{
+    name: string;
+    apiKey: string;
+    defaultModel: string;
+  }>): Promise<boolean> {
     const config = await this.readConfig();
-    if (!config) return false;
-    return !!config.providers?.[providerId];
+    if (!config) {
+      console.log('[ConfigVerifier] No config, returning false');
+      return false;
+    }
+    
+    const provider = config.providers?.[providerId];
+    if (!provider) {
+      console.log('[ConfigVerifier] Provider not found:', providerId);
+      return false;
+    }
+    
+    console.log('[ConfigVerifier] Provider found:', providerId, provider);
+    
+    if (!expectedData) return true;
+    
+    if (expectedData.name && provider.name !== expectedData.name) {
+      console.log('[ConfigVerifier] Provider name mismatch:', provider.name, '!=', expectedData.name);
+      return false;
+    }
+    if (expectedData.defaultModel && provider.defaultModel !== expectedData.defaultModel) {
+      console.log('[ConfigVerifier] Provider defaultModel mismatch');
+      return false;
+    }
+    return true;
   }
 
   /**
    * 验证 agent 配置是否存在
    */
-  static async verifyAgentExists(agentId: string): Promise<boolean> {
+  static async verifyAgentExists(agentId: string, expectedData?: Partial<{
+    name: string;
+  }>): Promise<boolean> {
     const config = await this.readConfig();
-    if (!config) return false;
-    return !!config.agents?.[agentId];
+    if (!config) {
+      console.log('[ConfigVerifier] No config, returning false');
+      return false;
+    }
+    
+    const agent = config.agents?.[agentId];
+    if (!agent) {
+      console.log('[ConfigVerifier] Agent not found:', agentId);
+      return false;
+    }
+    
+    console.log('[ConfigVerifier] Agent found:', agentId, agent);
+    
+    if (!expectedData) return true;
+    
+    if (expectedData.name && agent.name !== expectedData.name) {
+      console.log('[ConfigVerifier] Agent name mismatch:', agent.name, '!=', expectedData.name);
+      return false;
+    }
+    return true;
   }
 
   /**
    * 验证 memory 配置是否存在
    */
-  static async verifyMemoryExists(): Promise<boolean> {
+  static async verifyMemoryExists(expectedData?: Partial<{
+    enabled: boolean;
+    provider: string;
+    baseUrl: string;
+  }>): Promise<boolean> {
     const config = await this.readConfig();
-    if (!config) return false;
-    return !!config.memory;
+    if (!config) {
+      console.log('[ConfigVerifier] No config, returning false');
+      return false;
+    }
+    
+    const memory = config.memory;
+    if (!memory) {
+      console.log('[ConfigVerifier] Memory config not found');
+      return false;
+    }
+    
+    console.log('[ConfigVerifier] Memory config found:', memory);
+    
+    if (!expectedData) return true;
+    
+    if (expectedData.enabled !== undefined && memory.enabled !== expectedData.enabled) {
+      console.log('[ConfigVerifier] Memory enabled mismatch:', memory.enabled, '!=', expectedData.enabled);
+      return false;
+    }
+    if (expectedData.provider && memory.provider !== expectedData.provider) {
+      console.log('[ConfigVerifier] Memory provider mismatch:', memory.provider, '!=', expectedData.provider);
+      return false;
+    }
+    if (expectedData.baseUrl && memory.baseUrl !== expectedData.baseUrl) {
+      console.log('[ConfigVerifier] Memory baseUrl mismatch:', memory.baseUrl, '!=', expectedData.baseUrl);
+      return false;
+    }
+    return true;
   }
 }
 

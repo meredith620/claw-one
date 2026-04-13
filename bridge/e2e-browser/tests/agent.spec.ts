@@ -75,9 +75,9 @@ test.describe('Agent Configuration', () => {
       console.log('[Agent] API 验证通过：agentId 和 name 字段正确');
       
       // 文件层验证（ConfigVerifier 集成 - P1）
-      const inFile = await ConfigVerifier.verifyAgentExists(agentId);
+      const inFile = await ConfigVerifier.verifyAgentExists(agentId, { name: agentName });
       expect(inFile).toBeTruthy();
-      console.log('[Agent] ConfigVerifier 文件验证通过：agent 存在于 openclaw.json');
+      console.log('[Agent] ConfigVerifier 文件验证通过：agent name 字段匹配');
     } finally {
       // 清理
       const config = await getConfig();
