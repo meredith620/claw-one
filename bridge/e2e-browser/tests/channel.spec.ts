@@ -11,7 +11,7 @@
  * API 路径: GET/POST/DELETE http://claw-one-test-app:8080/api/channels
  */
 
-import { test, expect } from '../fixtures';
+import { test, expect, ConfigVerifier } from '../fixtures';
 
 const API_BASE = 'http://claw-one-test-app:8080';
 
@@ -79,18 +79,20 @@ test.describe('Channel CRUD 完整链路测试', () => {
 
       await expect(page.locator('.account-name', { hasText: testAccountName })).toBeVisible({ timeout: 5000 });
 
+      // API 层验证
       const channelExists = await verifyChannelViaAPI(testAccountId, { name: testAccountName });
       expect(channelExists).toBeTruthy();
+      
+      // 文件层验证（Issue 3 - ConfigVerifier 集成）
+      const inFile = await ConfigVerifier.verifyChannelExists(testAccountId, { name: testAccountName });
+      expect(inFile).toBeTruthy();
+      console.log('[Channel Add] ConfigVerifier 文件验证通过：账号存在于 openclaw.json');
     } finally {
       await deleteChannelViaAPI(testAccountId);
     }
   });
 
   test('删除账号 - 验证 UI 删除后 API 返回数据已移除', async ({ page }) => {
-    // 暂时跳过：Element Plus 确认对话框选择器不稳定
-    // TODO: 修复确认对话框交互后再启用
-    test.skip();
-    
     const testAccountId = `e2e-ui-del-${Date.now()}`;
     const testAccountName = `E2E UI Del ${Date.now()}`;
     const testToken = `token-del-${Date.now()}`;
@@ -111,25 +113,50 @@ test.describe('Channel CRUD 完整链路测试', () => {
 
       await expect(page.locator('.account-name', { hasText: testAccountName })).toBeVisible();
 
-      const channelExistsBefore = await verifyChannelViaAPI(testAccountId);
+      // 验证添加后 API 确实存在该账号
+      const channelExistsBefore = await verifyChannelViaAPI(testAccountId, { name: testAccountName });
       expect(channelExistsBefore).toBeTruthy();
 
-      // 点击删除按钮
-      const deleteBtn = page.locator('.account-card, .channel-account-item').filter({ hasText: testAccountName }).locator('button:has-text("删除")');
-      await deleteBtn.click();
+      // 点击删除按钮 - 使用更精确的选择器
+      const accountCard = page.locator('.account-card, .channel-account-item, .account-item')
+        .filter({ hasText: testAccountName })
+        .first();
+      await accountCard.locator('button:has-text("删除")').click();
 
-      // 等待确认对话框
+      // 使用 dialog 事件监听器处理确认对话框（更稳定）
+      page.once('dialog', async dialog => {
+        console.log('[Channel Delete] 捕获确认对话框:', dialog.message());
+        await dialog.accept();
+      });
+      
+      // 等待确认对话框出现并处理
       await page.waitForTimeout(500);
       
-      // 确认删除
-      await page.locator('.el-message-box__btns button').filter({ hasText: '确定' }).click();
-      await page.waitForTimeout(500);
+      // 尝试多种选择器确保能点击到确定按钮
+      const confirmButton = page.locator('.el-message-box__wrapper button, .el-message-box button')
+        .filter({ hasText: '确定' })
+        .first();
+      
+      if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await confirmButton.click();
+      }
+      
+      await page.waitForTimeout(1000);
 
-      await expect(page.locator('.account-name', { hasText: testAccountName })).not.toBeVisible();
+      // UI 验证：账号名称不再显示
+      await expect(page.locator('.account-name', { hasText: testAccountName })).not.toBeVisible({ timeout: 5000 });
 
+      // API 验证：UI 删除后 API 返回数据已移除（核心验证点）
       const channelDeleted = !(await verifyChannelViaAPI(testAccountId));
       expect(channelDeleted).toBeTruthy();
+      console.log('[Channel Delete] API 验证通过：账号已从后端移除');
+      
+      // 文件层验证（Issue 3 - ConfigVerifier 集成）
+      const inFile = await ConfigVerifier.verifyChannelDeleted(testAccountId);
+      expect(inFile).toBeTruthy();
+      console.log('[Channel Delete] ConfigVerifier 文件验证通过：账号已从 openclaw.json 移除');
     } finally {
+      // 确保清理：即使测试失败也尝试删除
       await deleteChannelViaAPI(testAccountId);
     }
   });

@@ -35,39 +35,52 @@ test.describe('Agent Configuration', () => {
     const agentId = `e2e-agent-${Date.now()}`;
     const agentName = `E2E Agent ${Date.now()}`;
     
-    // 1. 切换到 Multi-Agent 模式
-    await page.locator('.el-radio-button', { hasText: 'Multi-Agent 模式' }).click();
-    await page.waitForTimeout(300);
-    
-    await expect(page.locator('button:has-text("+ 添加 Agent")')).toBeVisible();
-    
-    // 2. 打开添加对话框
-    await page.click('button:has-text("+ 添加 Agent")');
-    
-    const dialog = page.locator('.el-dialog');
-    await expect(dialog).toBeVisible();
-    await expect(page.locator('.el-form-item', { hasText: 'Agent ID' })).toBeVisible();
-    await expect(page.locator('.el-form-item', { hasText: '显示名称' })).toBeVisible();
-    
-    // 3. 填写表单
-    await dialog.locator('.el-form-item', { hasText: 'Agent ID' }).locator('input').fill(agentId);
-    await dialog.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(agentName);
-    
-    // 4. 保存
-    await dialog.locator('.el-dialog__footer button:has-text("保存")').click();
-    await expect(dialog).not.toBeVisible({ timeout: 5000 });
-    
-    // 5. 验证 UI 显示新 Agent
-    await expect(page.locator('.agent-name', { hasText: agentName })).toBeVisible({ timeout: 5000 });
-    
-    // 6. 通过 API 验证数据已保存（完整链路验证）
-    const config = await getConfig();
-    const agentsConfig = config.agents;
-    console.log('[Agent] API agents 配置 keys:', Object.keys(agentsConfig || {}));
-    
-    // agents 配置中应该包含新建的 agent
-    // 注意：实际数据结构需要根据后端实现确认
-    expect(agentsConfig).toBeTruthy();
+    try {
+      // 1. 切换到 Multi-Agent 模式
+      await page.locator('.el-radio-button', { hasText: 'Multi-Agent 模式' }).click();
+      await page.waitForTimeout(300);
+      
+      await expect(page.locator('button:has-text("+ 添加 Agent")')).toBeVisible();
+      
+      // 2. 打开添加对话框
+      await page.click('button:has-text("+ 添加 Agent")');
+      
+      const dialog = page.locator('.el-dialog');
+      await expect(dialog).toBeVisible();
+      await expect(page.locator('.el-form-item', { hasText: 'Agent ID' })).toBeVisible();
+      await expect(page.locator('.el-form-item', { hasText: '显示名称' })).toBeVisible();
+      
+      // 3. 填写表单
+      await dialog.locator('.el-form-item', { hasText: 'Agent ID' }).locator('input').fill(agentId);
+      await dialog.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(agentName);
+      
+      // 4. 保存
+      await dialog.locator('.el-dialog__footer button:has-text("保存")').click();
+      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+      
+      // 5. 验证 UI 显示新 Agent
+      await expect(page.locator('.agent-name', { hasText: agentName })).toBeVisible({ timeout: 5000 });
+      
+      // 6. API 详细验证（完整链路验证 - Issue 2）
+      const config = await getConfig();
+      const agentsConfig = config.agents;
+      console.log('[Agent] API agents 配置 keys:', Object.keys(agentsConfig || {}));
+      
+      // 核心断言：精确验证新 agentId 在 config.agents 中
+      expect(agentsConfig).toBeTruthy();
+      expect(agentsConfig[agentId]).toBeTruthy();
+      
+      // 验证 agent 名称字段
+      expect(agentsConfig[agentId].name).toBe(agentName);
+      console.log('[Agent] API 验证通过：agentId 和 name 字段正确');
+    } finally {
+      // 清理
+      const config = await getConfig();
+      if (config.agents?.[agentId]) {
+        await page.request.delete(`${API_BASE}/api/agents/${agentId}`);
+        console.log('[Agent] 清理完成:', agentId);
+      }
+    }
   });
 
   test('保存 Agent 配置按钮存在', async ({ page }) => {

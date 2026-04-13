@@ -64,9 +64,23 @@ test.describe('Memory Configuration', () => {
     // 等待保存完成
     await page.waitForTimeout(1000);
 
-    // 5. 通过 API 验证配置已保存（完整链路验证）
+    // 5. API 详细验证（完整链路验证 - Issue 2）
     const response = await page.request.get(`${API_BASE}/api/memory`);
     expect(response.ok()).toBeTruthy();
-    console.log('[Memory] API 验证成功');
+    
+    // 核心断言：验证具体字段值
+    const memData = await response.json();
+    console.log('[Memory] API 返回数据:', JSON.stringify(memData, null, 2));
+    
+    // 验证 enabled 字段
+    expect(memData.enabled).toBe(true);
+    
+    // 验证 provider 字段
+    expect(memData.provider).toBe('ollama');
+    
+    // 验证 baseUrl 字段
+    expect(memData.baseUrl).toBe(baseUrl);
+    
+    console.log('[Memory] API 详细验证通过：enabled/provider/baseUrl 字段正确');
   });
 });
