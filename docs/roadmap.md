@@ -57,6 +57,61 @@ Phase 1: MVP (6-8周)
 | 出厂设置 | ⚠️ | `/api/setup/reset` 待完善 |
 | Vue 3 前端 | ⏳ | 待开发 |
 | systemd 集成 | ⏳ | 待完整验证 |
+| systemd 集成测试 | 📋 | 暂不实现，方案见下方待测试项 |
+| 健康检查测试 | 📋 | 暂不实现，方案见下方待测试项 |
+| 回滚流程测试 | 📋 | 暂不实现，方案见下方待测试项 |
+
+---
+
+## 待测试项（暂不实现）
+
+以下测试项已设计但暂不实现，记录于此以备后续参考。
+
+### systemd 集成测试
+
+**测试目标：** 验证 claw-one 服务通过 systemd 正确管理 OpenClaw 生命周期
+
+| 测试编号 | 测试场景 | 预期结果 |
+|----------|----------|----------|
+| T1 | `systemctl --user start claw-one` | OpenClaw 服务启动，状态变为 active |
+| T2 | `systemctl --user stop claw-one` | OpenClaw 服务停止，状态变为 inactive |
+| T3 | `systemctl --user restart claw-one` | 服务重启，进程 PID 变化 |
+| T4 | 开机自启 enable/disable | 重启后服务按配置自动运行/不运行 |
+| T5 | 服务失败后自动重启 | systemctl restart 策略生效 |
+
+**环境要求：** 需要真实的 systemd 用户环境，建议在主机环境执行（非 Docker）
+
+---
+
+### 健康检查测试
+
+**测试目标：** 验证 30s 超时健康检查机制
+
+| 测试编号 | 测试场景 | 预期结果 |
+|----------|----------|----------|
+| H1 | OpenClaw 正常运行 | 健康检查返回 `true`，响应时间 < 30s |
+| H2 | OpenClaw 进程崩溃 | 健康检查超时（30s），返回 `false` |
+| H3 | OpenClaw 配置错误 | 健康检查失败，返回 `false`，进入 Safe Mode |
+| H4 | 端口被占用 | 健康检查返回 `false`，错误分类为 System |
+| H5 | 并发健康检查 | 多个请求同时检查，不产生竞争条件 |
+
+**测试策略：**
+- Layer 1: 测试 `RuntimeManager::health_check()` 逻辑（使用 mock）
+- Layer 2: 测试 `/api/restart` 后的健康检查流程
+- Layer 3: 模拟 OpenClaw 服务无响应场景，验证 30s 超时
+
+---
+
+### 完整回滚流程测试
+
+**测试目标：** 验证 Safe Mode 自动回滚机制
+
+| 测试编号 | 测试场景 | 预期结果 |
+|----------|----------|----------|
+| R1 | 配置错误触发自动回滚 | 切换到上一个正常版本，状态标记 `auto_rolled_back: true` |
+| R2 | 配置错误无历史版本 | 进入 Safe Mode，提示无可用回滚版本 |
+| R3 | 系统错误不自动回滚 | 进入 Safe Mode，保留当前错误配置 |
+| R4 | 回滚后服务恢复 | 健康检查通过，状态恢复 Normal |
 
 ---
 
