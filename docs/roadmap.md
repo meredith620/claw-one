@@ -42,7 +42,10 @@ Phase 1: MVP (6-8周)
 |------|------|------|
 | 测试框架 | ✅ | 90 个测试覆盖三层架构 |
 | Config Guardian | ✅ | Git 快照、回滚、提交 |
-| API 实现 | ✅ | Provider/Agent/Memory/Channel CRUD |
+| Provider API | ✅ | CRUD 完整 |
+| Agent API | ✅ | CRUD 完整 |
+| Channel API | ✅ | CRUD 完整 |
+| Memory API | ✅ | GET/POST，无 DELETE（设计如此）|
 
 ### 🔄 进行中/待完善
 

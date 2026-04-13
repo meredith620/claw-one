@@ -1,4 +1,4 @@
-use axum::{extract::Extension, Json};
+use axum::{extract::{Extension, Path}, Json};
 use std::sync::Arc;
 
 use crate::{
@@ -53,6 +53,34 @@ pub async fn save_agents(
         }
         Err(e) => {
             tracing::error!("Git sync_to_version_config failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// 删除 Agent
+/// 路径格式: /api/agents/{agent_id}
+pub async fn delete_agent(
+    Extension(config_manager): Extension<Arc<ConfigManager>>,
+    Path(agent_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    config_manager.delete_agent(&agent_id).await?;
+
+    // 读取当前完整配置并同步到 version-config/
+    let config = config_manager.get_config().await?;
+    let commit_msg = format!("Delete agent: {}", agent_id);
+
+    match config_manager
+        .sync_to_version_config(&config, Some(commit_msg))
+        .await
+    {
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
+        Ok(None) => Ok(Json(serde_json::json!({"success": true}))),
+        Err(e) => {
+            tracing::error!("delete_agent: sync_to_version_config failed: {}", e);
             Err(e)
         }
     }

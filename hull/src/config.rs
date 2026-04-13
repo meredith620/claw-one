@@ -1027,6 +1027,45 @@ impl ConfigManager {
         Ok(())
     }
 
+    /// 删除 Channel 账号
+    pub async fn delete_channel_account(&self, channel_type: &str, account_id: &str) -> Result<()> {
+        let mut config = self.get_config().await?;
+
+        if let Some(channels) = config.get_mut("channels") {
+            if let Some(channel_obj) = channels.get_mut(channel_type) {
+                if let Some(accounts) = channel_obj.get_mut("accounts") {
+                    if let Some(accounts_obj) = accounts.as_object_mut() {
+                        accounts_obj.remove(account_id);
+                    }
+                }
+            }
+        }
+
+        self.save_config(&config).await?;
+        Ok(())
+    }
+
+    /// 删除 Agent
+    pub async fn delete_agent(&self, agent_id: &str) -> Result<()> {
+        let mut config = self.get_config().await?;
+
+        if let Some(agents) = config.get_mut("agents") {
+            if let Some(agents_obj) = agents.get_mut("list") {
+                if let Some(list) = agents_obj.as_array_mut() {
+                    list.retain(|a| {
+                        !a.get("id")
+                            .and_then(|id| id.as_str())
+                            .map(|id| id == agent_id)
+                            .unwrap_or(false)
+                    });
+                }
+            }
+        }
+
+        self.save_config(&config).await?;
+        Ok(())
+    }
+
     /// 获取模型优先级
     pub async fn get_model_priority(&self) -> Result<ModelPriority> {
         let config = self.get_config().await?;

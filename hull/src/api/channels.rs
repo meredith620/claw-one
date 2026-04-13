@@ -1,4 +1,4 @@
-use axum::{extract::Extension, Json};
+use axum::{extract::{Extension, Path}, Json};
 use std::sync::Arc;
 
 use crate::{
@@ -48,6 +48,37 @@ pub async fn save_channels(
         Ok(None) => Ok(Json(serde_json::json!({"success": true}))),
         Err(e) => {
             tracing::error!("save_channels: sync_to_version_config failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// 删除 Channel 账号
+/// 路径格式: /api/channels/{channel_type}/{account_id}
+pub async fn delete_channel(
+    Extension(config_manager): Extension<Arc<ConfigManager>>,
+    Path(params): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>> {
+    let (channel_type, account_id) = params;
+    config_manager
+        .delete_channel_account(&channel_type, &account_id)
+        .await?;
+
+    // 读取当前完整配置并同步到 version-config/
+    let config = config_manager.get_config().await?;
+    let commit_msg = format!("Delete {} channel account: {}", channel_type, account_id);
+
+    match config_manager
+        .sync_to_version_config(&config, Some(commit_msg))
+        .await
+    {
+        Ok(Some(commit_id)) => Ok(Json(serde_json::json!({
+            "success": true,
+            "commit": commit_id,
+        }))),
+        Ok(None) => Ok(Json(serde_json::json!({"success": true}))),
+        Err(e) => {
+            tracing::error!("delete_channel: sync_to_version_config failed: {}", e);
             Err(e)
         }
     }

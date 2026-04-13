@@ -14,7 +14,7 @@ pub use state::StateManager;
 
 use axum::{
     response::Json,
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use std::sync::Arc;
@@ -62,6 +62,10 @@ pub fn build_api_router(
             "/api/agents",
             get(api::agents::get_agents).post(api::agents::save_agents),
         )
+        .route(
+            "/api/agents/:id",
+            delete(api::agents::delete_agent),
+        )
         // Memory config API
         .route(
             "/api/memory",
@@ -71,6 +75,10 @@ pub fn build_api_router(
         .route(
             "/api/channels",
             get(api::channels::get_channels).post(api::channels::save_channels),
+        )
+        .route(
+            "/api/channels/:channel_type/:account_id",
+            delete(api::channels::delete_channel),
         )
         // Config validation API
         .route("/api/config/validate", post(api::config::validate_handler))

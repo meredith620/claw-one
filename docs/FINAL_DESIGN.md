@@ -342,6 +342,17 @@ cd hull && cargo build --release  # 将 dist/ 嵌入二进制
 | GET | /api/logs | 获取日志 |
 | GET | / | 静态文件（Vue 应用）|
 
+### 5.2 模块配置 API
+
+| 资源 | GET | POST | DELETE | 说明 |
+|------|-----|------|--------|------|
+| Provider | /api/providers | /api/providers | /api/providers/:id | 完整 CRUD |
+| Agent | /api/agents | /api/agents | /api/agents/:id | 完整 CRUD |
+| Channel | /api/channels | /api/channels | /api/channels/:type/:id | 完整 CRUD |
+| Memory | /api/memory | /api/memory | - | 只读/保存，无删除 |
+
+> **注意**: Memory 配置通过 POST /api/memory 整体更新，不支持单独删除字段。
+
 ### 5.2 状态响应
 
 ```json
