@@ -92,4 +92,57 @@ test.describe('Memory Configuration', () => {
     expect(inFile).toBeTruthy();
     console.log('[Memory] ConfigVerifier 文件验证通过：enabled/provider/baseUrl 字段匹配');
   });
+
+  test('禁用 Memory - 验证 UI 关闭后 API 和文件层数据已更新', async ({ page }) => {
+    // 1. 先启用 Memory（作为前置条件）
+    const switch_ = page.locator('.el-form-item', { hasText: '启用 Memory' }).locator('.el-switch');
+    const isChecked = await switch_.locator('input').isChecked();
+    if (!isChecked) {
+      await switch_.click();
+      await page.waitForTimeout(300);
+    }
+
+    // 2. 选择 Ollama provider
+    await page.locator('.el-radio-button', { hasText: 'Ollama' }).click();
+    await page.waitForTimeout(300);
+
+    // 3. 填写 Base URL
+    const baseUrl = 'http://localhost:11434';
+    const baseUrlInput = page.locator('.el-form-item', { hasText: 'Base URL' }).locator('input').first();
+    await baseUrlInput.fill(baseUrl);
+
+    // 4. 保存
+    await page.click('button:has-text("保存 Memory 配置")');
+    await page.waitForTimeout(1000);
+
+    // 5. 验证启用状态下 API 返回 enabled=true
+    let response = await page.request.get(`${API_BASE}/api/memory`);
+    let memData = await response.json();
+    expect(memData.enabled).toBe(true);
+    
+    // 6. 禁用 Memory 开关
+    await switch_.click();
+    await page.waitForTimeout(300);
+
+    // 7. 保存
+    await page.click('button:has-text("保存 Memory 配置")');
+    await page.waitForTimeout(1000);
+
+    // 8. API 验证：Memory 已禁用
+    response = await page.request.get(`${API_BASE}/api/memory`);
+    memData = await response.json();
+    console.log('[Memory Delete] API 返回数据:', JSON.stringify(memData, null, 2));
+    
+    expect(memData.enabled).toBe(false);
+    console.log('[Memory Delete] API 验证通过：Memory 已禁用');
+    
+    // 9. 文件层验证：Memory 配置中 enabled 已为 false
+    const inFile = await ConfigVerifier.verifyMemoryExists({
+      enabled: false,
+      provider: 'ollama',
+      baseUrl: baseUrl
+    });
+    expect(inFile).toBeTruthy();
+    console.log('[Memory Delete] ConfigVerifier 文件验证通过：enabled 字段已更新为 false');
+  });
 });

@@ -88,6 +88,75 @@ test.describe('Agent Configuration', () => {
     }
   });
 
+  test('删除 Agent - 验证 UI 删除后 API 和文件层数据已移除', async ({ page }) => {
+    const agentId = `e2e-agent-del-${Date.now()}`;
+    const agentName = `E2E Agent Del ${Date.now()}`;
+    
+    try {
+      // 1. 切换到 Multi-Agent 模式
+      await page.locator('.el-radio-button', { hasText: 'Multi-Agent 模式' }).click();
+      await page.waitForTimeout(300);
+      
+      // 2. 添加 Agent
+      await page.click('button:has-text("+ 添加 Agent")');
+      const dialog = page.locator('.el-dialog');
+      await expect(dialog).toBeVisible();
+      
+      await dialog.locator('.el-form-item', { hasText: 'Agent ID' }).locator('input').fill(agentId);
+      await dialog.locator('.el-form-item', { hasText: '显示名称' }).locator('input').fill(agentName);
+      
+      await dialog.locator('.el-dialog__footer button:has-text("保存")').click();
+      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+      
+      // 3. 验证 UI 显示新 Agent
+      await expect(page.locator('.agent-name', { hasText: agentName })).toBeVisible({ timeout: 5000 });
+      
+      // 4. API 验证添加成功
+      let config = await getConfig();
+      expect(config.agents[agentId]).toBeTruthy();
+      expect(config.agents[agentId].name).toBe(agentName);
+      
+      // 5. 点击删除按钮
+      const agentCard = page.locator('.agent-card, .agent-item')
+        .filter({ hasText: agentName })
+        .first();
+      
+      // 在点击删除之前注册 dialog 监听器（避免竞态）
+      const dialogPromise = page.waitForSelector('.el-message-box', { timeout: 3000 });
+      await agentCard.locator('button:has-text("删除")').click();
+      
+      // 等待确认对话框出现
+      await dialogPromise;
+      
+      // 点击确定按钮
+      await page.locator('.el-message-box__wrapper button, .el-message-box button')
+        .filter({ hasText: '确定' })
+        .click();
+      
+      await page.waitForTimeout(1000);
+      
+      // 6. UI 验证：Agent 名称不再显示
+      await expect(page.locator('.agent-name', { hasText: agentName })).not.toBeVisible({ timeout: 5000 });
+      
+      // 7. API 验证：UI 删除后 API 返回数据已移除
+      config = await getConfig();
+      const agentDeleted = !config.agents?.[agentId];
+      expect(agentDeleted).toBeTruthy();
+      console.log('[Agent Delete] API 验证通过：agent 已从后端移除');
+      
+      // 8. 文件层验证：Agent 已从 openclaw.json 移除
+      const inFile = await ConfigVerifier.verifyAgentExists(agentId);
+      expect(!inFile).toBeTruthy();
+      console.log('[Agent Delete] ConfigVerifier 文件验证通过：agent 已从 openclaw.json 移除');
+    } finally {
+      // 确保清理
+      const config = await getConfig();
+      if (config.agents?.[agentId]) {
+        await page.request.delete(`${API_BASE}/api/agents/${agentId}`);
+      }
+    }
+  });
+
   test('保存 Agent 配置按钮存在', async ({ page }) => {
     await expect(page.locator('button:has-text("保存 Agent 配置")')).toBeVisible();
   });
