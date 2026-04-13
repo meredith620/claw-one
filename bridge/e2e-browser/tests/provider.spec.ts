@@ -115,6 +115,92 @@ test.describe('Provider CRUD', () => {
     }
   });
 
+  test('删除 Provider 实例 - 验证 UI 删除后 API 和文件层数据已移除', async ({ page }) => {
+    const uniqueName = `e2e-provider-del-${Date.now()}`;
+    const testApiKey = 'sk-test-e2e-del-12345';
+    
+    try {
+      // 1. 添加 Provider
+      await page.locator('button:has-text("+ 添加实例")').first().click();
+      
+      const dialog = page.locator('.el-dialog');
+      await expect(dialog).toBeVisible();
+      
+      // 填写表单
+      await dialog.locator('.el-form-item', { hasText: '实例名称' }).locator('input').fill(uniqueName);
+      await dialog.locator('input[type="password"]').first().fill(testApiKey);
+      
+      // 选择默认模型
+      const modelSelect = dialog.locator('.el-form-item', { hasText: '默认模型' }).locator('.el-select').first();
+      const modelExists = await modelSelect.isVisible().catch(() => false);
+      if (modelExists) {
+        await modelSelect.click();
+        await page.waitForTimeout(300);
+        const firstOption = page.locator('.el-select-dropdown__item:visible').first();
+        if (await firstOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await firstOption.click();
+        }
+      }
+      
+      // 保存
+      await dialog.locator('.el-dialog__footer button:has-text("保存")').click();
+      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      
+      // 2. 验证 UI 显示新实例
+      await expect(page.locator('.instance-name, .instance-card', { hasText: uniqueName })).toBeVisible({ timeout: 5000 });
+      
+      // 3. API 验证添加成功
+      const providers = await getProviders();
+      const newProvider = providers.find(p => 
+        (p.name === uniqueName || p.id === uniqueName || p.instanceName === uniqueName)
+      );
+      expect(newProvider).toBeTruthy();
+      const providerId = newProvider.id;
+      
+      // 4. 点击删除按钮 - 使用更精确的选择器
+      const providerCard = page.locator('.instance-card, .provider-instance-item')
+        .filter({ hasText: uniqueName })
+        .first();
+      
+      // 在点击删除之前注册 dialog 监听器（避免竞态）
+      const dialogPromise = page.waitForSelector('.el-message-box', { timeout: 3000 });
+      await providerCard.locator('button:has-text("删除")').click();
+      
+      // 等待确认对话框出现
+      await dialogPromise;
+      
+      // 点击确定按钮
+      await page.locator('.el-message-box__wrapper button, .el-message-box button')
+        .filter({ hasText: '确定' })
+        .click();
+      
+      await page.waitForTimeout(1000);
+      
+      // 5. UI 验证：实例名称不再显示
+      await expect(page.locator('.instance-name, .instance-card', { hasText: uniqueName })).not.toBeVisible({ timeout: 5000 });
+      
+      // 6. API 验证：UI 删除后 API 返回数据已移除
+      const providersAfter = await getProviders();
+      const providerDeleted = !providersAfter.find(p => p.id === providerId);
+      expect(providerDeleted).toBeTruthy();
+      console.log('[Provider Delete] API 验证通过：实例已从后端移除');
+      
+      // 7. 文件层验证：实例已从 openclaw.json 移除
+      const inFile = await ConfigVerifier.verifyProviderExists(providerId);
+      expect(!inFile).toBeTruthy();
+      console.log('[Provider Delete] ConfigVerifier 文件验证通过：实例已从 openclaw.json 移除');
+    } finally {
+      // 确保清理
+      const providers = await getProviders();
+      const toDelete = providers.find(p => 
+        (p.name?.includes(`e2e-provider-`) || p.id?.includes(`e2e-provider-`))
+      );
+      if (toDelete) {
+        await deleteProviderViaAPI(toDelete.id);
+      }
+    }
+  });
+
   test('模型优先级设置区域存在', async ({ page }) => {
     await expect(page.locator('.priority-section')).toBeVisible();
     await expect(page.locator('.priority-section', { hasText: '模型优先级设置' })).toBeVisible();
