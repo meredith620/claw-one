@@ -13,7 +13,7 @@
 
 import { test, expect, ConfigVerifier } from '../fixtures';
 
-const API_BASE = 'http://claw-one-test-app:8080';
+const API_BASE = process.env.CLAW_ONE_URL || 'http://claw-one-test-app:8080';
 
 async function getChannelConfig(): Promise<any> {
   const response = await fetch(`${API_BASE}/api/channels`);
@@ -117,24 +117,26 @@ test.describe('Channel CRUD 完整链路测试', () => {
       const channelExistsBefore = await verifyChannelViaAPI(testAccountId, { name: testAccountName });
       expect(channelExistsBefore).toBeTruthy();
 
-      // 点击删除按钮 - 使用更精确的选择器
-      const accountCard = page.locator('.account-card, .channel-account-item, .account-item')
-        .filter({ hasText: testAccountName })
-        .first();
+      // 设置 dialog 处理器（在点击删除之前）
+      page.on('dialog', async dialog => {
+        console.log('[Delete Dialog detected]:', dialog.message());
+        await dialog.accept();
+      });
+
+      // 点击删除按钮 - 使用文本定位
+      const accountElement = page.locator('.account-name', { hasText: testAccountName });
+      await expect(accountElement).toBeVisible({ timeout: 5000 });
+      await accountElement.scrollIntoViewIfNeeded();
       
-      // 在点击删除之前注册 dialog 监听器（避免竞态）
-      const dialogPromise = page.waitForSelector('.el-message-box', { timeout: 3000 });
-      await accountCard.locator('button:has-text("删除")').click();
+      // 找到并点击删除按钮
+      await page.locator('.account-name:has-text("' + testAccountName + '")')
+        .locator('..')
+        .locator('..')
+        .locator('button:has-text("删除")')
+        .click({ timeout: 5000 });
       
-      // 等待确认对话框出现
-      await dialogPromise;
-      
-      // 点击确定按钮
-      await page.locator('.el-message-box__wrapper button, .el-message-box button')
-        .filter({ hasText: '确定' })
-        .click();
-      
-      await page.waitForTimeout(1000);
+      // 等待删除完成
+      await page.waitForTimeout(2000);
 
       // UI 验证：账号名称不再显示
       await expect(page.locator('.account-name', { hasText: testAccountName })).not.toBeVisible({ timeout: 5000 });

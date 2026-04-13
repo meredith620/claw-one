@@ -9,7 +9,7 @@
 
 import { test, expect, ConfigVerifier } from '../fixtures';
 
-const API_BASE = 'http://claw-one-test-app:8080';
+const API_BASE = process.env.CLAW_ONE_URL || 'http://claw-one-test-app:8080';
 
 async function getMemory(): Promise<any> {
   const response = await fetch(`${API_BASE}/api/memory`);

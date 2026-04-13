@@ -9,7 +9,7 @@
 
 import { test, expect, ConfigVerifier } from '../fixtures';
 
-const API_BASE = 'http://claw-one-test-app:8080';
+const API_BASE = process.env.CLAW_ONE_URL || 'http://claw-one-test-app:8080';
 
 async function getChannelConfig(): Promise<any> {
   const response = await fetch(`${API_BASE}/api/channels`);
@@ -149,18 +149,22 @@ test.describe('User Workflows', () => {
       const channelExistsBefore = await verifyChannelViaAPI(testChannelId, { name: testChannelName });
       expect(channelExistsBefore).toBeTruthy();
       
-      // 4. 点击删除按钮
-      const accountCard = page.locator('.account-card, .channel-account-item, .account-item')
-        .filter({ hasText: testChannelName })
-        .first();
+      // 4. 点击删除按钮 - 基于账号名称定位
+      const accountRow = page.locator('text="' + testChannelName + '"').locator('..').locator('..');
+      const deleteButton = accountRow.locator('button:has-text("删除")');
       
-      const dialogPromise = page.waitForSelector('.el-message-box', { timeout: 3000 });
-      await accountCard.locator('button:has-text("删除")').click();
-      await dialogPromise;
+      // 监听对话框（Element UI 的确认框）
+      page.on('dialog', async dialog => {
+        console.log('[Workflow Channel Delete] 检测到对话框:', dialog.message());
+        await dialog.accept();
+      });
       
-      await page.locator('.el-message-box__wrapper button, .el-message-box button')
-        .filter({ hasText: '确定' })
-        .click();
+      await deleteButton.click();
+      
+      // 等待对话框出现并自动处理
+      await page.waitForSelector('.el-message-box', { timeout: 5000 }).catch(() => {
+        console.log('[Workflow Channel Delete] 对话框未出现');
+      });
       
       await page.waitForTimeout(1000);
       

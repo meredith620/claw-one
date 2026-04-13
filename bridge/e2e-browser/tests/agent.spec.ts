@@ -9,7 +9,7 @@
 
 import { test, expect, ConfigVerifier } from '../fixtures';
 
-const API_BASE = 'http://claw-one-test-app:8080';
+const API_BASE = process.env.CLAW_ONE_URL || 'http://claw-one-test-app:8080';
 
 /**
  * 通过 API 获取完整配置
@@ -66,12 +66,14 @@ test.describe('Agent Configuration', () => {
       const agentsConfig = config.agents;
       console.log('[Agent] API agents 配置 keys:', Object.keys(agentsConfig || {}));
       
-      // 核心断言：精确验证新 agentId 在 config.agents 中
+      // 核心断言：精确验证新 agentId 在 config.agents.list 中
       expect(agentsConfig).toBeTruthy();
-      expect(agentsConfig[agentId]).toBeTruthy();
+      const agentList = agentsConfig.list || [];
+      const foundAgent = agentList.find((a: any) => a.id === agentId);
+      expect(foundAgent).toBeTruthy();
       
       // 验证 agent 名称字段
-      expect(agentsConfig[agentId].name).toBe(agentName);
+      expect(foundAgent.name).toBe(agentName);
       console.log('[Agent] API 验证通过：agentId 和 name 字段正确');
       
       // 文件层验证（ConfigVerifier 集成 - P1）
@@ -81,7 +83,8 @@ test.describe('Agent Configuration', () => {
     } finally {
       // 清理
       const config = await getConfig();
-      if (config.agents?.[agentId]) {
+      const agentList = config.agents?.list || [];
+      if (agentList.find((a: any) => a.id === agentId)) {
         await page.request.delete(`${API_BASE}/api/agents/${agentId}`);
         console.log('[Agent] 清理完成:', agentId);
       }
@@ -113,8 +116,10 @@ test.describe('Agent Configuration', () => {
       
       // 4. API 验证添加成功
       let config = await getConfig();
-      expect(config.agents[agentId]).toBeTruthy();
-      expect(config.agents[agentId].name).toBe(agentName);
+      const agentListAdd = config.agents?.list || [];
+      const foundAgentAdd = agentListAdd.find((a: any) => a.id === agentId);
+      expect(foundAgentAdd).toBeTruthy();
+      expect(foundAgentAdd.name).toBe(agentName);
       
       // 5. 点击删除按钮
       const agentCard = page.locator('.agent-card, .agent-item')
@@ -140,7 +145,8 @@ test.describe('Agent Configuration', () => {
       
       // 7. API 验证：UI 删除后 API 返回数据已移除
       config = await getConfig();
-      const agentDeleted = !config.agents?.[agentId];
+      const agentListDel = config.agents?.list || [];
+      const agentDeleted = !agentListDel.find((a: any) => a.id === agentId);
       expect(agentDeleted).toBeTruthy();
       console.log('[Agent Delete] API 验证通过：agent 已从后端移除');
       
@@ -151,8 +157,10 @@ test.describe('Agent Configuration', () => {
     } finally {
       // 确保清理
       const config = await getConfig();
-      if (config.agents?.[agentId]) {
-        await page.request.delete(`${API_BASE}/api/agents/${agentId}`);
+      const agentListCleanup = config.agents?.list || [];
+      if (agentListCleanup.find((a: any) => a.id === agentId)) {
+        // 使用 fetch 而非 page.request
+        await fetch(`${API_BASE}/api/agents/${agentId}`, { method: 'DELETE' }).catch(() => {});
       }
     }
   });

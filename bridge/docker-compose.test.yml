@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    container_name: claw-one-test-playwright
+    networks:
+      - claw-one-test-net
+    environment:
+      - CLAW_ONE_URL=http://claw-one-test-app:8080
+    volumes:
+      - ./test-results:/app/test-results
+    depends_on:
+      - claw-one-test-app
+
+networks:
+  claw-one-test-net:
+    external: true
+    name: claw-one-test-net
