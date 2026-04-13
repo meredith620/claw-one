@@ -165,8 +165,8 @@ test.describe('Provider CRUD', () => {
       console.log('[Provider Delete] API 验证通过：实例已从后端移除');
       
       // 7. 文件层验证：实例已从 openclaw.json 移除
-      const inFile = await ConfigVerifier.verifyProviderExists(providerId);
-      expect(!inFile).toBeTruthy();
+      const inFile = await ConfigVerifier.verifyProviderDeleted(providerId);
+      expect(inFile).toBeTruthy();
       console.log('[Provider Delete] ConfigVerifier 文件验证通过：实例已从 openclaw.json 移除');
     } finally {
       // 确保清理

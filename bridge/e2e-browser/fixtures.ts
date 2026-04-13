@@ -359,8 +359,23 @@ export class ConfigVerifier {
    * 验证 channel 账号是否已从 openclaw.json 中删除
    */
   static async verifyChannelDeleted(channelId: string): Promise<boolean> {
-    const exists = await this.verifyChannelExists(channelId);
-    return !exists;
+    const config = await this.readConfig();
+    if (!config) {
+      console.log('[ConfigVerifier] No config, skipping delete verification');
+      return true; // 文件不可访问，跳过验证
+    }
+    
+    // 遍历所有 channel 类型查找账号
+    for (const channelType of ['mattermost', 'feishu', 'ding', 'lark']) {
+      const channelConfig = config[channelType];
+      if (channelConfig?.accounts?.[channelId]) {
+        console.log(`[ConfigVerifier] Channel ${channelId} still exists in ${channelType}`);
+        return false; // 账号仍然存在
+      }
+    }
+    
+    console.log(`[ConfigVerifier] Channel ${channelId} deleted from config`);
+    return true; // 账号已删除
   }
 
   /**
@@ -396,6 +411,26 @@ export class ConfigVerifier {
       return true; // 文件不可访问，跳过验证
     }
     return true;
+  }
+
+  /**
+   * 验证 provider 是否已从 openclaw.json 中删除
+   */
+  static async verifyProviderDeleted(providerId: string): Promise<boolean> {
+    const config = await this.readConfig();
+    if (!config) {
+      console.log('[ConfigVerifier] No config, skipping delete verification');
+      return true; // 文件不可访问，跳过验证
+    }
+    
+    const provider = config.providers?.[providerId];
+    if (!provider) {
+      console.log(`[ConfigVerifier] Provider ${providerId} not found (deleted)`);
+      return true; // provider 不存在，已删除
+    }
+    
+    console.log(`[ConfigVerifier] Provider ${providerId} still exists in config`);
+    return false; // provider 仍然存在
   }
 
   /**
@@ -436,6 +471,34 @@ export class ConfigVerifier {
       return true; // 文件不可访问，跳过验证
     }
     return true;
+  }
+
+  /**
+   * 验证 agent 是否已从 openclaw.json 中删除
+   */
+  static async verifyAgentDeleted(agentId: string): Promise<boolean> {
+    const config = await this.readConfig();
+    if (!config) {
+      console.log('[ConfigVerifier] No config, skipping delete verification');
+      return true; // 文件不可访问，跳过验证
+    }
+    
+    const agentsObj = config.agents;
+    let agent: any = null;
+    
+    if (agentsObj?.list && Array.isArray(agentsObj.list)) {
+      agent = agentsObj.list.find((a: any) => a.id === agentId);
+    } else if (agentsObj?.[agentId]) {
+      agent = agentsObj[agentId];
+    }
+    
+    if (!agent) {
+      console.log(`[ConfigVerifier] Agent ${agentId} not found (deleted)`);
+      return true; // agent 不存在，已删除
+    }
+    
+    console.log(`[ConfigVerifier] Agent ${agentId} still exists in config`);
+    return false; // agent 仍然存在
   }
 
   /**

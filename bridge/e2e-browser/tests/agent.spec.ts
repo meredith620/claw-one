@@ -151,8 +151,8 @@ test.describe('Agent Configuration', () => {
       console.log('[Agent Delete] API 验证通过：agent 已从后端移除');
       
       // 8. 文件层验证：Agent 已从 openclaw.json 移除
-      const inFile = await ConfigVerifier.verifyAgentExists(agentId);
-      expect(!inFile).toBeTruthy();
+      const inFile = await ConfigVerifier.verifyAgentDeleted(agentId);
+      expect(inFile).toBeTruthy();
       console.log('[Agent Delete] ConfigVerifier 文件验证通过：agent 已从 openclaw.json 移除');
     } finally {
       // 确保清理
