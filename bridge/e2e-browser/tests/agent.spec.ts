@@ -7,7 +7,7 @@
  * 注意: /api/agents 返回模型别名，agent 配置通过 /api/config 验证
  */
 
-import { test, expect } from '../fixtures';
+import { test, expect, ConfigVerifier } from '../fixtures';
 
 const API_BASE = 'http://claw-one-test-app:8080';
 
@@ -73,6 +73,11 @@ test.describe('Agent Configuration', () => {
       // 验证 agent 名称字段
       expect(agentsConfig[agentId].name).toBe(agentName);
       console.log('[Agent] API 验证通过：agentId 和 name 字段正确');
+      
+      // 文件层验证（ConfigVerifier 集成 - P1）
+      const inFile = await ConfigVerifier.verifyAgentExists(agentId);
+      expect(inFile).toBeTruthy();
+      console.log('[Agent] ConfigVerifier 文件验证通过：agent 存在于 openclaw.json');
     } finally {
       // 清理
       const config = await getConfig();

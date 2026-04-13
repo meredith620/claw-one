@@ -7,7 +7,7 @@
  * API 路径: GET/POST/DELETE http://claw-one-test-app:8080/api/providers
  */
 
-import { test, expect } from '../fixtures';
+import { test, expect, ConfigVerifier } from '../fixtures';
 
 const API_BASE = 'http://claw-one-test-app:8080';
 
@@ -97,6 +97,11 @@ test.describe('Provider CRUD', () => {
       }
       
       console.log('[Provider] API 详细验证通过：实例名称和字段正确');
+      
+      // 文件层验证（ConfigVerifier 集成 - P1）
+      const inFile = await ConfigVerifier.verifyProviderExists(uniqueName);
+      expect(inFile).toBeTruthy();
+      console.log('[Provider] ConfigVerifier 文件验证通过：实例存在于 openclaw.json');
     } finally {
       // 清理 - 使用精确的时间戳匹配
       const providers = await getProviders();

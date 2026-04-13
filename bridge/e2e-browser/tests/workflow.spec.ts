@@ -7,7 +7,7 @@
  * 部分测试包含完整链路验证（UI + API）
  */
 
-import { test, expect } from '../fixtures';
+import { test, expect, ConfigVerifier } from '../fixtures';
 
 const API_BASE = 'http://claw-one-test-app:8080';
 
@@ -93,6 +93,11 @@ test.describe('User Workflows', () => {
         }
       }
       expect(found).toBeTruthy();
+      
+      // 文件层验证（ConfigVerifier 集成 - P2）
+      const inFile = await ConfigVerifier.verifyChannelExists(testChannelId, { name: testChannelName });
+      expect(inFile).toBeTruthy();
+      console.log('[Workflow Channel] ConfigVerifier 文件验证通过：账号存在于 openclaw.json');
     } finally {
       await deleteChannelViaAPI(testChannelId);
     }

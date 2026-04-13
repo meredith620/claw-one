@@ -7,7 +7,7 @@
  * API 路径: GET/PUT http://claw-one-test-app:8080/api/memory
  */
 
-import { test, expect } from '../fixtures';
+import { test, expect, ConfigVerifier } from '../fixtures';
 
 const API_BASE = 'http://claw-one-test-app:8080';
 
@@ -82,5 +82,10 @@ test.describe('Memory Configuration', () => {
     expect(memData.baseUrl).toBe(baseUrl);
     
     console.log('[Memory] API 详细验证通过：enabled/provider/baseUrl 字段正确');
+    
+    // 文件层验证（ConfigVerifier 集成 - P1）
+    const inFile = await ConfigVerifier.verifyMemoryExists();
+    expect(inFile).toBeTruthy();
+    console.log('[Memory] ConfigVerifier 文件验证通过：memory 配置存在于 openclaw.json');
   });
 });

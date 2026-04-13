@@ -121,25 +121,18 @@ test.describe('Channel CRUD 完整链路测试', () => {
       const accountCard = page.locator('.account-card, .channel-account-item, .account-item')
         .filter({ hasText: testAccountName })
         .first();
+      
+      // 在点击删除之前注册 dialog 监听器（避免竞态）
+      const dialogPromise = page.waitForSelector('.el-message-box', { timeout: 3000 });
       await accountCard.locator('button:has-text("删除")').click();
-
-      // 使用 dialog 事件监听器处理确认对话框（更稳定）
-      page.once('dialog', async dialog => {
-        console.log('[Channel Delete] 捕获确认对话框:', dialog.message());
-        await dialog.accept();
-      });
       
-      // 等待确认对话框出现并处理
-      await page.waitForTimeout(500);
+      // 等待确认对话框出现
+      await dialogPromise;
       
-      // 尝试多种选择器确保能点击到确定按钮
-      const confirmButton = page.locator('.el-message-box__wrapper button, .el-message-box button')
+      // 点击确定按钮
+      await page.locator('.el-message-box__wrapper button, .el-message-box button')
         .filter({ hasText: '确定' })
-        .first();
-      
-      if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmButton.click();
-      }
+        .click();
       
       await page.waitForTimeout(1000);
 

@@ -359,6 +359,15 @@ export class ConfigVerifier {
     if (!config) return false;
     return !!config.agents?.[agentId];
   }
+
+  /**
+   * 验证 memory 配置是否存在
+   */
+  static async verifyMemoryExists(): Promise<boolean> {
+    const config = await this.readConfig();
+    if (!config) return false;
+    return !!config.memory;
+  }
 }
 
 export { expect };
