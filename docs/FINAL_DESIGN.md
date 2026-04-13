@@ -369,9 +369,18 @@ cd hull && cargo build --release  # 将 dist/ 嵌入二进制
 
 > **注意**: 手工处理方案下，配置错误不会自动回滚，用户可在 Safe Mode 页面选择继续编辑或手动回滚。
 
----
+```json
+// GET /api/status
+{
+  "service": {
+    "status": "running"  // running|stopped|starting|stopping|failed|unknown
+  },
+  "healthy": true,
+  "pid": 12345
+}
+```
 
-## 6. 部署与安装
+---
 
 ### 6.1 首次启动
 

@@ -9,3 +9,4 @@ pub mod rollback;
 pub mod setup;
 pub mod snapshots;
 pub mod state;
+pub mod status;

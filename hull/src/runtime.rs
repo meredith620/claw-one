@@ -210,7 +210,7 @@ impl RuntimeManager {
     }
 
     /// 获取 openclaw gateway 进程的 PID
-    async fn get_process_pid(&self) -> Option<u32> {
+    pub async fn get_process_pid(&self) -> Option<u32> {
         // 使用 pidof 获取 openclaw-gateway 的 PID，避免 pgrep -f 匹配命令行自身
         let output = Command::new("pidof")
             .arg("openclaw-gateway")

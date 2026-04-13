@@ -40,12 +40,14 @@ Phase 1: MVP (6-8周)
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| 测试框架 | ✅ | 90 个测试覆盖三层架构 |
+| 测试框架 | ✅ | 100+ 测试覆盖四层架构 |
 | Config Guardian | ✅ | Git 快照、回滚、提交 |
 | Provider API | ✅ | CRUD 完整 |
 | Agent API | ✅ | CRUD 完整 |
 | Channel API | ✅ | CRUD 完整 |
 | Memory API | ✅ | GET/POST，无 DELETE（设计如此）|
+| Runtime Status API | ✅ | GET /api/status 实现 |
+| State API | ✅ | GET /api/state（Claw One 内部状态）|
 
 ### 🔄 进行中/待完善
 

@@ -36,6 +36,7 @@ pub fn build_api_router(
     Router::new()
         .route("/api/health", get(health_handler))
         .route("/api/state", get(api::state::handler))
+        .route("/api/status", get(api::status::handler))
         // Config API
         .route(
             "/api/config",

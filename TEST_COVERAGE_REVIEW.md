@@ -31,6 +31,7 @@
 | **Config 验证** | ✅ 完整性规则 | ✅ 多模块交叉验证 | ✅ | ❌ |
 | **Claude Code 流程** | ✅ 新增 | ✅ 新增 | ❌ | ❌ |
 | **Exec 演示** | ✅ 新增 | ✅ 新增 | ❌ | ❌ |
+| **Runtime Status API** | ✅ Unit | ✅ API 集成 | ❌ | ❌ |
 | **Safe Mode** | ✅ 进入/恢复/异常 | ⚠️ 部分 | ⚠️ 受限 | ❌ |
 | **出厂重置** | ❌ | ❌ | ⚠️ 仅健康检查 | ❌ |
 
@@ -43,8 +44,9 @@
 | `test_claude_code_flow.rs` | 3 | Claude Code 流程测试（新增） |
 | `test_exec_demo.rs` | 5 | Exec 演示流程测试（新增） |
 | `test_validation_complex.rs` | 17 | 复杂验证场景测试（新增） |
+| `api_status.rs` | 3 | Runtime Status API 测试（新增） |
 
-> 合计新增：**25 个** Layer 2 集成测试
+> 合计新增：**28 个** Layer 2 集成测试
 
 ---
 

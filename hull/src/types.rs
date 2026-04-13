@@ -77,3 +77,24 @@ pub struct ModelPriority {
     pub primary: String,
     pub fallbacks: Vec<String>,
 }
+
+// Runtime 状态响应（用于 API）
+// 注意：这与 runtime.rs 中的 ServiceStatus 枚举不同
+// 这里是 API 响应的序列化格式
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "status")]
+pub enum RuntimeStatusResponse {
+    Running,
+    Stopped,
+    Starting,
+    Stopping,
+    Failed { message: String },
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusResponse {
+    pub service: RuntimeStatusResponse,
+    pub healthy: bool,
+    pub pid: Option<u32>,
+}

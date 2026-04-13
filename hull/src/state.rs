@@ -9,7 +9,7 @@ use crate::{
     error::{AppError, Result},
     runtime::{ErrorType, RuntimeManager, ServiceStatus},
     settings::OpenClawConfig,
-    types::{OpenClawState, StateResponse},
+    types::{OpenClawState, RuntimeStatusResponse, StateResponse, StatusResponse},
 };
 
 /// 应用状态
@@ -128,6 +128,28 @@ impl StateManager {
                 })
             }
         }
+    }
+
+    /// 获取 Runtime 状态响应（用于 /api/status）
+    pub async fn get_runtime_status_response(&self) -> Result<StatusResponse> {
+        let service_status = self.runtime_manager.status().await?;
+        let healthy = self.runtime_manager.health_check().await?;
+        let pid = self.runtime_manager.get_process_pid().await;
+
+        let response_status = match service_status {
+            ServiceStatus::Running => RuntimeStatusResponse::Running,
+            ServiceStatus::Stopped => RuntimeStatusResponse::Stopped,
+            ServiceStatus::Starting => RuntimeStatusResponse::Starting,
+            ServiceStatus::Stopping => RuntimeStatusResponse::Stopping,
+            ServiceStatus::Failed(msg) => RuntimeStatusResponse::Failed { message: msg },
+            ServiceStatus::Unknown => RuntimeStatusResponse::Unknown,
+        };
+
+        Ok(StatusResponse {
+            service: response_status,
+            healthy,
+            pid,
+        })
     }
 
     /// 事务性配置应用
