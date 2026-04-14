@@ -1,8 +1,8 @@
 # Provider 增强功能设计
 
-**版本**: v1.1
+**版本**: v1.2
 **日期**: 2026-04-14
-**状态**: 待开发（P0 问题已修复）
+**状态**: 待开发（Review P0/P1/P2 已全部修复）
 
 ---
 
@@ -111,6 +111,18 @@ if (isMinimax) {
 ```
 
 ```typescript
+// MiniMax 表单默认值
+const getDefaultFormData = (type: string) => {
+  if (type === 'minimax') {
+    return {
+      region: 'global',  // P1 修复: 明确默认值
+      baseUrl: 'https://api.minimax.io/anthropic',
+      api: 'anthropic-messages',
+    }
+  }
+  // ...
+}
+
 // MiniMax 自动设置 baseUrl
 watch(() => formData.region, (region) => {
   if (currentType.value === 'minimax') {
@@ -132,30 +144,22 @@ watch(() => formData.region, (region) => {
 
 当前保存 Provider 时，直接写入配置，如果凭证无效要等到实际使用才能发现。Verify 功能在保存前验证凭证有效性，提升用户体验。
 
-### 3.2 P0 问题修复汇总
+### 3.2 Review 问题修复汇总
 
-| 问题 | 修复方案 |
-|------|----------|
-| API 路径不一致 | 统一用 `/api/providers/verify`（预保存验证，不带 `:id`） |
-| Anthropic 验证逻辑 bug | `content` 是数组，需检查 `as_array().map(\|a\| !a.is_empty())` |
-| openai-completions 漏实现 | 添加 `verify_openai_compatible` 分支 |
+| 优先级 | 问题 | 修复方案 |
+|--------|------|----------|
+| **P0** | API 路径不一致 | 统一用 `/api/providers/verify`（预保存验证，不带 `:id`） |
+| **P0** | Anthropic 验证逻辑 bug | `content` 是数组，需检查 `as_array().map(\|a\| !a.is_empty())` |
+| **P0** | openai-completions 漏实现 | 添加 `verify_openai_compatible` 分支 |
+| **P0** | 无用 Extension(config_manager) | 移除未使用的 Extension |
+| **P1** | region 切换时未清除验证状态 | 重置 `verifyStatus` |
+| **P1** | 格式校验失败无 UI 反馈 | 格式错误时设置 `verifyStatus` 显示错误 |
+| **P1** | MiniMax region 默认值未定义 | 明确默认值为 `global` |
+| **P2** | 验证按钮 loading 时可重复点击 | 添加 `:disabled="verifying"` |
+| **P2** | 无超时反馈 | 添加超时检测，10s 后提示用户 |
+| **P2** | MiniMax API Key 格式校验不精确 | 改用正则校验：`^eyJ[A-Za-z0-9-_]+$`（JWT 格式） |
 
-### 3.3 前端 P1 问题修复
-
-#### region 切换时清除验证状态
-
-```typescript
-watch(() => formData.region, (region) => {
-  if (currentType.value === 'minimax') {
-    formData.baseUrl = region === 'cn'
-      ? 'https://api.minimaxi.com/anthropic'
-      : 'https://api.minimax.io/anthropic'
-    formData.api = 'anthropic-messages'
-    // P1 修复: region 切换时重置验证状态
-    verifyStatus.value = null
-  }
-})
-```
+### 3.3 前端实现
 
 #### API Key 格式校验（前置检查）
 
@@ -165,9 +169,11 @@ const validateApiKeyFormat = (apiKey: string, apiType: string): { valid: boolean
     return { valid: false, message: '请输入 API Key' }
   }
 
-  // MiniMax: 长度校验（通常 50+ 字符）
-  if (apiType === 'anthropic-messages' && apiKey.length < 30) {
-    return { valid: false, message: 'API Key 格式不正确（长度过短）' }
+  // MiniMax: JWT 格式校验（eyJ 开头）
+  if (apiType === 'anthropic-messages') {
+    if (!/^eyJ[A-Za-z0-9-_]+$/.test(apiKey)) {
+      return { valid: false, message: 'MiniMax API Key 格式不正确（应为 JWT 格式）' }
+    }
   }
 
   // OpenAI: 应以 sk- 开头
@@ -244,6 +250,12 @@ POST /api/providers/verify
 }
 ```
 
+**HTTP 状态码说明:**
+- `200`: 请求成功（无论验证通过与否）
+- `400`: 请求参数缺失或格式错误
+- `408`: 请求超时
+- `500`: 服务器内部错误
+
 #### 验证策略
 
 不同 API 类型使用不同的验证方式：
@@ -260,9 +272,9 @@ POST /api/providers/verify
 // hull/src/api/providers.rs
 
 /// 验证 Provider 凭证（预保存验证，不依赖 provider id）
+/// POST /api/providers/verify
 pub async fn verify_provider(
-    Extension(config_manager): Extension<Arc<ConfigManager>>,
-    Json(data): Json<serde_json::Value>,
+    Json(data): Json<serde_json::Value>,  // P0 修复: 移除未使用的 Extension(config_manager)
 ) -> Result<Json<serde_json::Value>> {
     let api_key = data.get("apiKey")
         .and_then(|v| v.as_str())
@@ -313,9 +325,16 @@ async fn verify_openai_compatible(base_url: &str, api_key: &str) -> Result<bool>
     let response = client
         .get(&url)
         .header("Authorization", format!("Bearer {}", api_key))
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(10))  // P2 修复: 明确超时时间
         .send()
-        .await?;
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                AppError::BadRequest("验证请求超时，请检查网络连接".to_string())
+            } else {
+                AppError::BadRequest(format!("验证请求失败: {}", e))
+            }
+        })?;
 
     Ok(response.status().is_success())
 }
@@ -333,9 +352,16 @@ async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bo
             "max_tokens": 10,
             "messages": [{"role": "user", "content": "hi"}]
         }))
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(10))  // P2 修复: 明确超时时间
         .send()
-        .await?;
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                AppError::BadRequest("验证请求超时，请检查网络连接".to_string())
+            } else {
+                AppError::BadRequest(format!("验证请求失败: {}", e))
+            }
+        })?;
 
     // P0 修复: Anthropic 返回 200 即使 key 无效，content 是数组需要检查非空
     if response.status() == 200 {
@@ -360,12 +386,14 @@ async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bo
 <el-form-item label="API Key" required>
   <el-input v-model="formData.apiKey" type="password" placeholder="输入 API Key" show-password>
     <template #append>
-      <el-button @click="verifyCredentials" :loading="verifying">
-        验证
+      <!-- P2 修复: loading 时禁用按钮 -->
+      <el-button @click="verifyCredentials" :loading="verifying" :disabled="verifying">
+        {{ verifying ? '验证中...' : '验证' }}
       </el-button>
     </template>
   </el-input>
 </el-form-item>
+<!-- 格式校验错误也显示在这里 -->
 <div v-if="verifyStatus" class="verify-result" :class="verifyStatus.valid ? 'success' : 'error'">
   {{ verifyStatus.message }}
 </div>
@@ -376,6 +404,7 @@ async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bo
 ```typescript
 const verifying = ref(false)
 const verifyStatus = ref<{ valid: boolean; message: string } | null>(null)
+const verifyTimeout = ref<number | null>(null)
 ```
 
 ##### 3. Verify 方法
@@ -383,19 +412,27 @@ const verifyStatus = ref<{ valid: boolean; message: string } | null>(null)
 ```typescript
 const verifyCredentials = async () => {
   if (!formData.apiKey) {
-    ElMessage.warning('请输入 API Key')
+    verifyStatus.value = { valid: false, message: '请输入 API Key' }
     return
   }
 
-  // P1 修复: 前置格式校验
+  // P1 修复: 格式校验失败时设置 verifyStatus，UI 显示错误
   const formatCheck = validateApiKeyFormat(formData.apiKey, formData.api)
   if (!formatCheck.valid) {
-    ElMessage.warning(formatCheck.message)
+    verifyStatus.value = { valid: false, message: formatCheck.message }
     return
   }
 
   verifying.value = true
   verifyStatus.value = null
+
+  // P2 修复: 设置 15s 超时（大于后端 10s 超时）
+  const timeoutId = setTimeout(() => {
+    verifying.value = false
+    verifyStatus.value = { valid: false, message: '验证超时，请检查网络连接' }
+    ElMessage.error('验证请求超时')
+  }, 15000)
+  verifyTimeout.value = timeoutId as any
 
   try {
     const response = await fetch(`/api/providers/verify`, {
@@ -407,6 +444,13 @@ const verifyCredentials = async () => {
         api: formData.api,
       }),
     })
+
+    // 清除超时计时器
+    if (verifyTimeout.value) {
+      clearTimeout(verifyTimeout.value)
+      verifyTimeout.value = null
+    }
+
     const result = await response.json()
 
     if (result.success) {
@@ -425,6 +469,10 @@ const verifyCredentials = async () => {
       ElMessage.error(result.error || '验证请求失败')
     }
   } catch (e) {
+    if (verifyTimeout.value) {
+      clearTimeout(verifyTimeout.value)
+      verifyTimeout.value = null
+    }
     verifyStatus.value = {
       valid: false,
       message: '网络错误，请检查连接'
@@ -501,6 +549,11 @@ async fn test_verify_provider_invalid_key() {
 async fn test_verify_provider_network_error() {
     // Mock 一个网络错误
 }
+
+#[tokio::test]
+async fn test_verify_provider_timeout() {
+    // Mock 一个超时响应
+}
 ```
 
 ### 5.2 集成测试（Layer 2）
@@ -568,7 +621,8 @@ echo "测试: Provider 验证功能"
 ## 7. 风险与注意事项
 
 1. **网络隔离**: Verify 需要访问外部 API，测试环境可能无法访问
-2. **超时处理**: API 响应慢时需要合理超时
+2. **超时处理**: API 响应慢时需要合理超时（后端 10s，前端 15s）
 3. **敏感信息**: API Key 不应在前端日志中打印
 4. **重试限制**: 避免频繁验证请求
 5. **日志脱敏**: 后端需排除 /providers/verify 路径的详细日志
+6. **HTTP 状态码**: 验证结果在 body 中返回，HTTP 状态码用于表示请求是否成功
