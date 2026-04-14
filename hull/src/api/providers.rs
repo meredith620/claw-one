@@ -3,6 +3,7 @@ use axum::{
     Json,
 };
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::{
     config::ConfigManager,
@@ -127,6 +128,129 @@ pub async fn save_provider(
             tracing::error!("sync_to_version_config failed: {}", e);
             Err(e)
         }
+    }
+}
+
+/// 验证 Provider 凭证（预保存验证）
+/// POST /api/providers/verify
+pub async fn verify_provider(
+    Json(data): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>> {
+    let api_key = data
+        .get("apiKey")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::BadRequest("Missing apiKey".to_string()))?;
+
+    let base_url = data
+        .get("baseUrl")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::BadRequest("Missing baseUrl".to_string()))?;
+
+    let api_type = data
+        .get("api")
+        .and_then(|v| v.as_str())
+        .unwrap_or("openai-chat");
+
+    match verify_by_api_type(api_type, base_url, api_key).await {
+        Ok(valid) => Ok(Json(serde_json::json!({
+            "success": true,
+            "valid": valid,
+            "message": if valid { "凭证验证通过" } else { "凭证无效" }
+        }))),
+        Err(e) => Ok(Json(serde_json::json!({
+            "success": false,
+            "error": e.to_string()
+        }))),
+    }
+}
+
+async fn verify_by_api_type(
+    api_type: &str,
+    base_url: &str,
+    api_key: &str,
+) -> Result<bool> {
+    match api_type {
+        "openai-chat" | "openai-completions" => {
+            verify_openai_compatible(base_url, api_key).await
+        }
+        "anthropic-messages" => {
+            verify_anthropic_compatible(base_url, api_key).await
+        }
+        _ => Ok(true),
+    }
+}
+
+async fn verify_openai_compatible(base_url: &str, api_key: &str) -> Result<bool> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+
+    let response = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                AppError::BadRequest("验证请求超时，请检查网络连接".to_string())
+            } else {
+                AppError::BadRequest(format!("验证请求失败: {}", e))
+            }
+        })?;
+
+    if response.status().is_success() {
+        let body: serde_json::Value = response.json().await.map_err(|e| {
+            AppError::BadRequest(format!("解析响应失败: {}", e))
+        })?;
+        let valid = body
+            .get("data")
+            .and_then(|d| d.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+        Ok(valid)
+    } else {
+        Ok(false)
+    }
+}
+
+async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bool> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
+
+    let response = client
+        .post(&url)
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .json(&serde_json::json!({
+            "model": "claude-3-haiku-20240307",
+            "max_tokens": 10,
+            "messages": [{"role": "user", "content": "hi"}]
+        }))
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                AppError::BadRequest("验证请求超时，请检查网络连接".to_string())
+            } else {
+                AppError::BadRequest(format!("验证请求失败: {}", e))
+            }
+        })?;
+
+    if response.status() == 200 {
+        let body: serde_json::Value = response.json().await
+            .map_err(|e| AppError::BadRequest(format!("解析响应失败: {}", e)))?;
+        if body.get("error").is_some() {
+            return Ok(false);
+        }
+        let content_valid = body
+            .get("content")
+            .and_then(|c| c.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+        Ok(content_valid)
+    } else {
+        Ok(false)
     }
 }
 

@@ -83,12 +83,61 @@
           <el-input v-model="formData.name" placeholder="如 work、personal" :disabled="isEditing" />
           <div v-if="!isEditing" class="form-hint">Provider ID: {{ currentType }}-{{ formData.name || 'xxx' }}</div>
         </el-form-item>
-        <el-form-item v-if="currentType === 'moonshot'" label="版本">
-          <el-radio-group v-model="formData.version">
-            <el-radio-button label="coding">Coding</el-radio-button>
-            <el-radio-button label="ai">.ai</el-radio-button>
-            <el-radio-button label="cn">.cn</el-radio-button>
+        <el-form-item v-if="currentType === 'moonshot'" label="地区">
+          <el-radio-group v-model="formData.region">
+            <el-radio-button label="global">国际版</el-radio-button>
+            <el-radio-button label="cn">中国版</el-radio-button>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="currentType === 'moonshot'" label="模型">
+          <el-select v-model="formData.defaultModel" filterable allow-create style="width: 100%" placeholder="选择或输入模型名称">
+            <el-option-group
+              v-for="group in getModelOptionGroups('moonshot')"
+              :key="group.label"
+              :label="group.label"
+            >
+              <el-option
+                v-for="model in group.options"
+                :key="model.value"
+                :label="model.label"
+                :value="model.value"
+              >
+                <div class="model-option">
+                  <span class="model-name">{{ model.label }}</span>
+                  <span v-if="model.desc" class="model-desc">{{ model.desc }}</span>
+                </div>
+              </el-option>
+            </el-option-group>
+          </el-select>
+          <div class="form-hint">可选择推荐模型或输入自定义模型名称</div>
+        </el-form-item>
+        <el-form-item v-if="currentType === 'minimax'" label="地区">
+          <el-radio-group v-model="formData.region">
+            <el-radio-button label="global">国际版</el-radio-button>
+            <el-radio-button label="cn">中国版</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="currentType === 'minimax'" label="模型">
+          <el-select v-model="formData.defaultModel" filterable allow-create style="width: 100%" placeholder="选择或输入模型名称">
+            <el-option-group
+              v-for="group in getModelOptionGroups('minimax')"
+              :key="group.label"
+              :label="group.label"
+            >
+              <el-option
+                v-for="model in group.options"
+                :key="model.value"
+                :label="model.label"
+                :value="model.value"
+              >
+                <div class="model-option">
+                  <span class="model-name">{{ model.label }}</span>
+                  <span v-if="model.desc" class="model-desc">{{ model.desc }}</span>
+                </div>
+              </el-option>
+            </el-option-group>
+          </el-select>
+          <div class="form-hint">可选择推荐模型或输入自定义模型名称</div>
         </el-form-item>
         <el-form-item v-if="currentType === 'custom'" label="Base URL" required>
           <el-input v-model="formData.baseUrl" placeholder="如 https://api.example.com/v1" />
@@ -108,7 +157,16 @@
         </el-form-item>
         
         <el-form-item label="API Key" required>
-          <el-input v-model="formData.apiKey" type="password" placeholder="输入 API Key" show-password />
+          <el-input v-model="formData.apiKey" type="password" placeholder="输入 API Key" show-password>
+            <template #append>
+              <el-button @click="verifyCredentials" :loading="verifying" :disabled="verifying">
+                {{ verifying ? '验证中...' : '验证' }}
+              </el-button>
+            </template>
+          </el-input>
+          <div v-if="verifyStatus" class="verify-result" :class="verifyStatus.valid ? 'success' : 'error'">
+            {{ verifyStatus.message }}
+          </div>
         </el-form-item>
         <el-form-item label="默认模型" required>
           <el-select v-model="formData.defaultModel" filterable allow-create style="width: 100%" placeholder="选择或输入模型名称">
@@ -145,16 +203,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowDown, ArrowRight } from '@element-plus/icons-vue'
-import { getProviders, saveProvider, deleteProvider, getModelPriority, saveModelPriority } from '../api'
+import { getProviders, saveProvider, deleteProvider, getModelPriority, saveModelPriority, verifyProvider } from '../api'
 import { useConfigValidation } from '../composables/useConfigValidation'
 
 const providerTypes = [
   { id: 'moonshot', name: 'Moonshot', icon: '🌙' },
   { id: 'openai', name: 'OpenAI', icon: '🤖' },
   { id: 'anthropic', name: 'Anthropic', icon: '🧠' },
+  { id: 'minimax', name: 'MiniMax', icon: '🔵' },
   { id: 'custom', name: '其他 Provider', icon: '🔧' },
 ]
 
@@ -162,13 +221,18 @@ const loading = ref(false)
 const saving = ref(false)
 const savingPriority = ref(false)
 
+// 验证状态
+const verifying = ref(false)
+const verifyStatus = ref<{ valid: boolean; message: string } | null>(null)
+const verifyTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+
 // 配置验证
 const { validating, validateAndShow } = useConfigValidation()
 const currentType = ref('moonshot')
 const isEditing = ref(false)
 
 const instances = reactive<Record<string, any[]>>({
-  moonshot: [], openai: [], anthropic: [], custom: [],
+  moonshot: [], openai: [], anthropic: [], minimax: [], custom: [],
 })
 
 const modelPriority = reactive({
@@ -182,7 +246,7 @@ const showAddDialog = ref(false)
 const formData = reactive({
   id: '',
   name: '',
-  version: 'coding',
+  region: 'global',
   apiKey: '',
   baseUrl: '',
   api: 'openai-chat',
@@ -234,6 +298,7 @@ const loadData = async () => {
     instances.moonshot = []
     instances.openai = []
     instances.anthropic = []
+    instances.minimax = []
     instances.custom = []
     
     // 分类 provider
@@ -251,6 +316,7 @@ const loadData = async () => {
       
       const isOpenAI = id.startsWith('openai-') || baseUrl.includes('openai.com')
       const isAnthropic = id.startsWith('anthropic-') || id.includes('claude') || baseUrl.includes('anthropic.com')
+      const isMinimax = baseUrl.includes('minimax.io') || baseUrl.includes('minimaxi.com')
       
       if (isMoonshot) {
         // 为 kimi-coding 设置正确的 version
@@ -258,6 +324,8 @@ const loadData = async () => {
           p.version = 'coding'
         }
         instances.moonshot.push(p)
+      } else if (isMinimax) {
+        instances.minimax.push(p)
       } else if (isOpenAI) {
         instances.openai.push(p)
       } else if (isAnthropic) {
@@ -292,6 +360,8 @@ const getModelOptions = (typeId: string) => {
     moonshot: [
       { value: 'kimi-k2.5', label: 'Kimi K2.5' },
       { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking' },
+      { value: 'kimi-k2-thinking-turbo', label: 'Kimi K2 Thinking Turbo' },
+      { value: 'kimi-k2-turbo', label: 'Kimi K2 Turbo' },
     ],
     openai: [
       { value: 'gpt-4o', label: 'GPT-4o' },
@@ -300,6 +370,10 @@ const getModelOptions = (typeId: string) => {
     anthropic: [
       { value: 'claude-3-opus', label: 'Claude 3 Opus' },
       { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
+    ],
+    minimax: [
+      { value: 'MiniMax-M2.7', label: 'MiniMax M2.7' },
+      { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax M2.7 Highspeed' },
     ],
   }
   return opts[typeId] || []
@@ -320,18 +394,12 @@ const getModelOptionGroups = (typeId: string) => {
   const groups: Record<string, { label: string; options: { value: string; label: string; desc?: string }[] }[]> = {
     moonshot: [
       {
-        label: '推荐模型',
+        label: 'K2 系列（推荐）',
         options: [
-          { value: 'kimi-k2.5', label: 'Kimi K2.5', desc: '通用对话，支持128K上下文' },
-          { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking', desc: '深度思考，适合复杂推理' },
-        ]
-      },
-      {
-        label: '其他模型',
-        options: [
-          { value: 'moonshot-v1-8k', label: 'Moonshot v1 8K', desc: '基础模型' },
-          { value: 'moonshot-v1-32k', label: 'Moonshot v1 32K', desc: '长上下文' },
-          { value: 'moonshot-v1-128k', label: 'Moonshot v1 128K', desc: '超长上下文' },
+          { value: 'kimi-k2.5', label: 'Kimi K2.5', desc: '通用对话，支持256K上下文' },
+          { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking', desc: '深度思考，复杂推理' },
+          { value: 'kimi-k2-thinking-turbo', label: 'Kimi K2 Thinking Turbo', desc: '快速深度思考' },
+          { value: 'kimi-k2-turbo', label: 'Kimi K2 Turbo', desc: '快速响应，256K上下文' },
         ]
       }
     ],
@@ -367,6 +435,15 @@ const getModelOptionGroups = (typeId: string) => {
         ]
       }
     ],
+    minimax: [
+      {
+        label: 'M2.7 系列（推荐）',
+        options: [
+          { value: 'MiniMax-M2.7', label: 'MiniMax M2.7', desc: '通用推理，支持图像理解，204.8K上下文' },
+          { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax M2.7 Highspeed', desc: '快速推理，文本专用' },
+        ]
+      }
+    ],
   }
   return groups[typeId] || [{ label: '自定义', options: [] }]
 }
@@ -379,9 +456,9 @@ const openAddDialog = (typeId: string) => {
   formData.apiKey = ''
   formData.defaultModel = ''
   formData.enabled = true
-  formData.version = 'coding'
+  formData.region = 'global'
   // 修复: 使用 OpenClaw 支持的 API 类型
-  formData.api = typeId === 'anthropic' ? 'anthropic-messages' : 'openai-responses'
+  formData.api = typeId === 'anthropic' ? 'anthropic-messages' : typeId === 'moonshot' ? 'openai-completions' : typeId === 'minimax' ? 'anthropic-messages' : 'openai-responses'
   formData.baseUrl = ''
   showAddDialog.value = true
 }
@@ -400,9 +477,12 @@ const editInstance = (instance: any) => {
   
   const isOpenAI = id.startsWith('openai-') || baseUrl.includes('openai.com')
   const isAnthropic = id.startsWith('anthropic-') || id.includes('claude') || baseUrl.includes('anthropic.com')
+  const isMinimax = baseUrl.includes('minimax.io') || baseUrl.includes('minimaxi.com')
   
   if (isMoonshot) {
     currentType.value = 'moonshot'
+  } else if (isMinimax) {
+    currentType.value = 'minimax'
   } else if (isOpenAI) {
     currentType.value = 'openai'
   } else if (isAnthropic) {
@@ -418,9 +498,23 @@ const editInstance = (instance: any) => {
   formData.defaultModel = instance.defaultModel || ''
   formData.enabled = instance.enabled !== false
   formData.baseUrl = instance.baseUrl || ''
-  formData.api = instance.api || (currentType.value === 'anthropic' ? 'anthropic-messages' : 'openai-responses')
-  // 对于 kimi-coding，默认使用 coding 版本
-  formData.version = instance.version || (id === 'kimi-coding' ? 'coding' : 'coding')
+  formData.api = instance.api || (currentType.value === 'anthropic' ? 'anthropic-messages' : currentType.value === 'moonshot' ? 'openai-completions' : currentType.value === 'minimax' ? 'anthropic-messages' : 'openai-responses')
+  // region 检测
+  if (currentType.value === 'moonshot') {
+    if (baseUrl.includes('moonshot.cn')) {
+      formData.region = 'cn'
+    } else {
+      formData.region = 'global'
+    }
+  } else if (currentType.value === 'minimax') {
+    if (baseUrl.includes('minimaxi.com')) {
+      formData.region = 'cn'
+    } else {
+      formData.region = 'global'
+    }
+  } else {
+    formData.region = 'global'
+  }
   showAddDialog.value = true
 }
 
@@ -434,6 +528,10 @@ const saveInstance = async () => {
   }
   if (currentType.value === 'custom' && !formData.api && !isEditing.value) {
     ElMessage.error('请选择 API 协议'); return
+  }
+  // MiniMax API Key 格式校验（JWT 格式：eyJ 开头）
+  if (formData.api === 'anthropic-messages' && !formData.apiKey.startsWith('eyJ')) {
+    ElMessage.error('MiniMax API Key 格式不正确（应为 JWT 格式，以 eyJ 开头）'); return
   }
   if (!formData.apiKey) { ElMessage.error('请输入 API Key'); return }
   if (!formData.defaultModel) { ElMessage.error('请选择默认模型'); return }
@@ -457,22 +555,23 @@ const saveInstance = async () => {
       baseUrl = formData.baseUrl || ''
     } else {
       const baseUrls: Record<string, Record<string, string>> = {
-        moonshot: { coding: 'https://api.kimi.com/coding/', ai: 'https://api.moonshot.ai/v1', cn: 'https://api.moonshot.cn/v1' },
+        moonshot: { global: 'https://api.moonshot.ai/v1', cn: 'https://api.moonshot.cn/v1' },
         openai: { default: 'https://api.openai.com/v1' },
         anthropic: { default: 'https://api.anthropic.com/v1' },
+        minimax: { global: 'https://api.minimax.io/anthropic', cn: 'https://api.minimaxi.com/anthropic' },
       }
-      baseUrl = baseUrls[currentType.value]?.[formData.version] || baseUrls[currentType.value]?.default || ''
+      baseUrl = baseUrls[currentType.value]?.[formData.region] || baseUrls[currentType.value]?.default || ''
     }
 
     const data = {
       id, 
       name: currentType.value === 'custom' ? formData.name || id : formData.name,
-      version: currentType.value === 'moonshot' ? formData.version : undefined,
+      region: (currentType.value === 'moonshot' || currentType.value === 'minimax') ? formData.region : undefined,
       enabled: formData.enabled,
       apiKey: formData.apiKey,
       baseUrl: baseUrl,
       defaultModel: formData.defaultModel,
-      api: formData.api || 'openai-chat',
+      api: currentType.value === 'moonshot' ? 'openai-completions' : (currentType.value === 'minimax' ? 'anthropic-messages' : (formData.api || 'openai-chat')),
     }
 
     // 构建完整配置进行验证
@@ -544,6 +643,112 @@ const addFallback = () => {
 const removeFallback = (index: number) => { 
   modelPriority.fallbacks.splice(index, 1) 
 }
+
+// API Key 格式校验
+const validateApiKeyFormat = (apiKey: string, apiType: string): { valid: boolean; message: string } => {
+  if (!apiKey || apiKey.trim().length === 0) {
+    return { valid: false, message: '请输入 API Key' }
+  }
+
+  // MiniMax: JWT 格式校验（eyJ 开头）
+  if (apiType === 'anthropic-messages' && !/^eyJ[A-Za-z0-9-_]+$/.test(apiKey)) {
+    return { valid: false, message: 'MiniMax API Key 格式不正确（应为 JWT 格式）' }
+  }
+
+  // OpenAI: 应以 sk- 开头
+  if ((apiType === 'openai-chat' || apiType === 'openai-completions' || apiType === 'openai-responses' || apiType === 'openai-codex-responses') && !apiKey.startsWith('sk-')) {
+    return { valid: false, message: 'OpenAI API Key 应以 sk- 开头' }
+  }
+
+  return { valid: true, message: '' }
+}
+
+// 验证凭证
+const verifyCredentials = async () => {
+  // 1. 检查 API Key 是否存在
+  if (!formData.apiKey) {
+    verifyStatus.value = { valid: false, message: '请输入 API Key' }
+    return
+  }
+
+  // 2. 格式校验
+  const formatCheck = validateApiKeyFormat(formData.apiKey, formData.api)
+  if (!formatCheck.valid) {
+    verifyStatus.value = { valid: false, message: formatCheck.message }
+    return
+  }
+
+  // 3. 设置 verifying 状态
+  verifying.value = true
+  verifyStatus.value = null
+
+  // 4. 设置超时
+  const timeoutId = setTimeout(() => {
+    verifying.value = false
+    verifyStatus.value = { valid: false, message: '验证超时，请检查网络连接' }
+    ElMessage.error('验证请求超时')
+  }, 15000)
+  verifyTimeout.value = timeoutId as any
+
+  try {
+    // 构建 baseUrl
+    let baseUrl: string
+    if (formData.baseUrl) {
+      baseUrl = formData.baseUrl
+    } else {
+      const baseUrls: Record<string, Record<string, string>> = {
+        moonshot: { global: 'https://api.moonshot.ai/v1', cn: 'https://api.moonshot.cn/v1' },
+        openai: { default: 'https://api.openai.com/v1' },
+        anthropic: { default: 'https://api.anthropic.com/v1' },
+        minimax: { global: 'https://api.minimax.io/anthropic', cn: 'https://api.minimaxi.com/anthropic' },
+        custom: { default: '' },
+      }
+      baseUrl = baseUrls[currentType.value]?.[formData.region] || baseUrls[currentType.value]?.default || ''
+    }
+
+    const response = await verifyProvider({
+      apiKey: formData.apiKey,
+      baseUrl: baseUrl,
+      api: formData.api,
+    })
+
+    // 清除超时
+    if (verifyTimeout.value) {
+      clearTimeout(verifyTimeout.value)
+      verifyTimeout.value = null
+    }
+
+    if (response.data.success) {
+      verifyStatus.value = {
+        valid: response.data.valid,
+        message: response.data.message || (response.data.valid ? '验证通过' : '验证失败')
+      }
+      if (!response.data.valid) {
+        ElMessage.error('API Key 无效，请检查')
+      }
+    } else {
+      verifyStatus.value = {
+        valid: false,
+        message: response.data.error || '验证失败'
+      }
+      ElMessage.error(response.data.error || '验证请求失败')
+    }
+  } catch (e: any) {
+    if (verifyTimeout.value) {
+      clearTimeout(verifyTimeout.value)
+      verifyTimeout.value = null
+    }
+    verifyStatus.value = { valid: false, message: '网络错误，请检查连接' }
+    ElMessage.error('验证请求失败')
+  } finally {
+    verifying.value = false
+  }
+}
+
+// region 切换时重置 verifyStatus
+watch(() => formData.region, () => {
+  verifyStatus.value = null
+})
 
 onMounted(loadData)
 </script>
@@ -719,5 +924,24 @@ onMounted(loadData)
 .model-desc {
   font-size: 12px;
   color: #909399;
+}
+
+.verify-result {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.verify-result.success {
+  background: #f0f9ff;
+  color: #067647;
+  border: 1px solid #b7eb8f;
+}
+
+.verify-result.error {
+  background: #fff2f0;
+  color: #cf1322;
+  border: 1px solid #ffccc7;
 }
 </style>

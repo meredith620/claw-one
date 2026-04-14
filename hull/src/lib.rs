@@ -49,6 +49,10 @@ pub fn build_api_router(
         // Provider config API
         .route("/api/providers", get(api::providers::list_providers))
         .route(
+            "/api/providers/verify",
+            post(api::providers::verify_provider),
+        )
+        .route(
             "/api/providers/:id",
             get(api::providers::get_provider)
                 .post(api::providers::save_provider)

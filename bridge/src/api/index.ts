@@ -27,6 +27,7 @@ export const getProviders = () => api.get('/providers')
 export const getProvider = (id: string) => api.get(`/providers/${id}`)
 export const saveProvider = (id: string, data: any) => api.post(`/providers/${id}`, data)
 export const deleteProvider = (id: string) => api.delete(`/providers/${id}`)
+export const verifyProvider = (data: { apiKey: string; baseUrl: string; api: string }) => api.post('/providers/verify', data)
 
 // 模型优先级 API
 export const getModelPriority = () => api.get('/model-priority')
