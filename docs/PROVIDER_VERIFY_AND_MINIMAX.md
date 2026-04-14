@@ -1,16 +1,17 @@
 # Provider 增强功能设计
 
-**版本**: v1.2
+**版本**: v1.3
 **日期**: 2026-04-14
-**状态**: 待开发（Review P0/P1/P2 已全部修复）
+**状态**: 待开发（Review P0/P1/P2 已全部修复，Moonshot 基于源码补充）
 
 ---
 
 ## 1. 概述
 
-本文档描述两项 Provider 增强功能：
-1. **新增 MiniMax Provider** - 内置支持的模型服务商
-2. **Provider Verify 功能** - 保存前验证凭证有效性
+本文档描述三项 Provider 增强功能：
+1. **完善 Moonshot Provider** - 基于 OpenClaw 源码补充完整信息
+2. **新增 MiniMax Provider** - 内置支持的模型服务商
+3. **Provider Verify 功能** - 保存前验证凭证有效性
 
 ---
 
@@ -138,7 +139,137 @@ watch(() => formData.region, (region) => {
 
 ---
 
-## 3. Provider Verify 功能
+## 3. Moonshot Provider（基于 OpenClaw 源码补充）
+
+### 3.1 OpenClaw 源码参考
+
+根据 OpenClaw 源码 `provider-catalog-zY8QJDj_.js` 和 `onboard.ts`：
+
+#### Base URL 配置
+
+```typescript
+const MOONSHOT_BASE_URL = "https://api.moonshot.ai/v1";
+const MOONSHOT_CN_BASE_URL = "https://api.moonshot.cn/v1";
+```
+
+#### API 类型
+
+```typescript
+// Moonshot 使用 OpenAI 兼容 API
+const api = "openai-completions";
+```
+
+#### 模型目录（Model Catalog）
+
+```typescript
+const MOONSHOT_MODEL_CATALOG = [
+  {
+    id: "kimi-k2.5",
+    name: "Kimi K2.5",
+    reasoning: false,
+    input: ["text", "image"],
+    contextWindow: 262144,
+    maxTokens: 262144,
+  },
+  {
+    id: "kimi-k2-thinking",
+    name: "Kimi K2 Thinking",
+    reasoning: true,
+    input: ["text"],
+    contextWindow: 262144,
+    maxTokens: 262144,
+  },
+  {
+    id: "kimi-k2-thinking-turbo",
+    name: "Kimi K2 Thinking Turbo",
+    reasoning: true,
+    input: ["text"],
+    contextWindow: 262144,
+    maxTokens: 262144,
+  },
+  {
+    id: "kimi-k2-turbo",
+    name: "Kimi K2 Turbo",
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 256000,
+    maxTokens: 16384,
+  },
+];
+```
+
+#### 默认模型
+
+```typescript
+const MOONSHOT_DEFAULT_MODEL_ID = "kimi-k2.5";
+const MOONSHOT_DEFAULT_MODEL_REF = "moonshot/kimi-k2.5";
+```
+
+### 3.2 自动检测 Moonshot Provider
+
+```typescript
+// loadData() 中判断
+const isMoonshot = baseUrl.includes('moonshot.ai') ||
+                   baseUrl.includes('moonshot.cn')
+
+if (isMoonshot) {
+  instances.moonshot.push(p)
+}
+```
+
+### 3.3 Moonshot 表单特殊处理
+
+```vue
+<el-form-item v-if="currentType === 'moonshot'" label="地区">
+  <el-radio-group v-model="formData.region">
+    <el-radio-button label="global">国际版</el-radio-button>
+    <el-radio-button label="cn">中国版</el-radio-button>
+  </el-radio-group>
+</el-form-item>
+```
+
+```typescript
+// Moonshot 表单默认值
+const getDefaultFormData = (type: string) => {
+  if (type === 'moonshot') {
+    return {
+      region: 'global',
+      baseUrl: 'https://api.moonshot.ai/v1',
+      api: 'openai-completions',
+      defaultModel: 'kimi-k2.5',
+    }
+  }
+  // ...
+}
+
+// region 切换时自动设置 baseUrl
+watch(() => formData.region, (region) => {
+  if (currentType.value === 'moonshot') {
+    formData.baseUrl = region === 'cn'
+      ? 'https://api.moonshot.cn/v1'
+      : 'https://api.moonshot.ai/v1'
+    formData.api = 'openai-completions'
+    verifyStatus.value = null
+  }
+})
+```
+
+### 3.4 模型选择器
+
+```vue
+<el-form-item v-if="currentType === 'moonshot'" label="模型">
+  <el-select v-model="formData.model" placeholder="选择模型">
+    <el-option label="Kimi K2.5" value="kimi-k2.5" />
+    <el-option label="Kimi K2 Thinking" value="kimi-k2-thinking" />
+    <el-option label="Kimi K2 Thinking Turbo" value="kimi-k2-thinking-turbo" />
+    <el-option label="Kimi K2 Turbo" value="kimi-k2-turbo" />
+  </el-select>
+</el-form-item>
+```
+
+---
+
+## 4. Provider Verify 功能
 
 ### 3.1 背景
 
@@ -505,7 +636,7 @@ const saveInstance = async () => {
 
 ---
 
-## 4. API 变更汇总
+## 5. API 变更汇总
 
 ### 4.1 新增端点
 
@@ -528,7 +659,7 @@ curl -X POST http://localhost:8080/api/providers/verify \
 
 ---
 
-## 5. 测试设计
+## 6. 测试设计
 
 ### 5.1 单元测试（Layer 1）
 
@@ -600,25 +731,30 @@ echo "测试: Provider 验证功能"
 
 ---
 
-## 6. 实现计划
+## 7. 实现计划
 
-### Phase 1: MiniMax Provider
+### Phase 1: Moonshot Provider 完善
+- [ ] 前端: 补充 Moonshot region 切换（global/cn）
+- [ ] 前端: 补充模型选择器
+- [ ] 验证: 与 OpenClaw 源码保持一致
+
+### Phase 2: MiniMax Provider
 - [ ] 后端: 添加 minimax 到 provider 类型识别
 - [ ] 前端: 添加 minimax 类型和表单支持
 - [ ] 测试: 单元测试 + 集成测试
 
-### Phase 2: Provider Verify
+### Phase 3: Provider Verify
 - [ ] 后端: 实现 /api/providers/verify 端点
 - [ ] 前端: 添加验证按钮和状态显示
 - [ ] 测试: 单元测试 + 集成测试 + E2E
 
-### Phase 3: 完整链路验证
+### Phase 4: 完整链路验证
 - [ ] 测试: 从前端表单到后端 API 到配置文件完整路径
 - [ ] 文档: 更新 FINAL_DESIGN.md
 
 ---
 
-## 7. 风险与注意事项
+## 8. 风险与注意事项
 
 1. **网络隔离**: Verify 需要访问外部 API，测试环境可能无法访问
 2. **超时处理**: API 响应慢时需要合理超时（后端 10s，前端 15s）
