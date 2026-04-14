@@ -37,7 +37,7 @@ shellexpand = "3.1"
 
 # HTTP 客户端
 git2 = "0.18"
-reqwest = { version = "0.11", features = ["json"], default-features = false }
+reqwest = { version = "0.11", features = ["json", "rustls-tls", "multipart"], default-features = false }
 async-trait = "0.1"
 toml = "0.8"
 
