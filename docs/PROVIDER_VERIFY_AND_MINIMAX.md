@@ -291,11 +291,11 @@ watch(() => formData.region, (region) => {
 
 ## 4. Provider Verify 功能
 
-### 3.1 背景
+### 4.1 背景
 
 当前保存 Provider 时，直接写入配置，如果凭证无效要等到实际使用才能发现。Verify 功能在保存前验证凭证有效性，提升用户体验。
 
-### 3.2 Review 问题修复汇总
+### 4.2 Review 问题修复汇总
 
 | 优先级 | 问题 | 修复方案 |
 |--------|------|----------|
@@ -312,7 +312,7 @@ watch(() => formData.region, (region) => {
 | **P2** | 无超时反馈 | 添加超时检测，10s 后提示用户 |
 | **P2** | MiniMax API Key 格式校验不精确 | 改用正则校验：`^eyJ[A-Za-z0-9-_]+$`（JWT 格式） |
 
-### 3.3 前端实现
+### 4.3 前端实现
 
 #### API Key 格式校验（前置检查）
 
@@ -351,7 +351,7 @@ const debouncedVerify = debounce(() => {
 @input="debouncedVerify"
 ```
 
-### 3.4 安全建议（实现时需确认）
+### 4.4 安全建议（实现时需确认）
 
 > ⚠️ 以下安全措施需要在实现阶段确认和落实：
 
@@ -359,7 +359,7 @@ const debouncedVerify = debounce(() => {
 2. **错误处理**: 避免使用 `unwrap()`，改用 `?` + 错误处理
 3. **频率限制**: 考虑添加验证请求频率限制（如每分钟最多 10 次）
 
-### 3.5 设计方案
+### 4.5 设计方案
 
 #### API 设计
 
@@ -678,13 +678,13 @@ const saveInstance = async () => {
 
 ## 5. API 变更汇总
 
-### 4.1 新增端点
+### 5.1 新增端点
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | /api/providers/verify | 验证 Provider 凭证 |
 
-### 4.2 请求/响应示例
+### 5.2 请求/响应示例
 
 ```bash
 # 验证 Provider
@@ -701,7 +701,7 @@ curl -X POST http://localhost:8080/api/providers/verify \
 
 ## 6. 测试设计
 
-### 5.1 单元测试（Layer 1）
+### 6.1 单元测试（Layer 1）
 
 ```rust
 // hull/tests/api_providers.rs
@@ -727,7 +727,7 @@ async fn test_verify_provider_timeout() {
 }
 ```
 
-### 5.2 集成测试（Layer 2）
+### 6.2 集成测试（Layer 2）
 
 ```rust
 #[tokio::test]
@@ -753,7 +753,7 @@ async fn test_verify_minimax_provider() {
 }
 ```
 
-### 5.3 E2E 测试（Layer 3）
+### 6.3 E2E 测试（Layer 3）
 
 ```bash
 # e2e/tests/test_provider_verify.sh
