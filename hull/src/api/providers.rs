@@ -4,11 +4,196 @@ use axum::{
 };
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     config::ConfigManager,
     error::{AppError, Result},
 };
+
+// GitHub OAuth Device Flow state
+static GITHUB_OAUTH_STATE: Lazy<RwLock<Option<GitHubOAuthState>>> = Lazy::new(|| RwLock::new(None));
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct GitHubOAuthState {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    pending: bool,
+    access_token: Option<String>,
+    expires_at: Option<i64>,
+}
+
+/// Initialize GitHub Copilot OAuth Device Flow
+/// POST /api/providers/github-copilot/init
+pub async fn github_copilot_init() -> Result<Json<serde_json::Value>> {
+    let client = reqwest::Client::new();
+    
+    // GitHub Copilot client ID (public GitHub OAuth app)
+    let client_id = "Iv1.b507a08c87ecfe98";
+    let scope = "read:user";
+    
+    // Request device code from GitHub
+    let response = client
+        .post("https://github.com/login/device/code")
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", client_id),
+            ("scope", scope),
+        ])
+        .send()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("GitHub OAuth 请求失败: {}", e)))?;
+    
+    if !response.status().is_success() {
+        return Err(AppError::BadRequest(format!(
+            "GitHub OAuth 失败: HTTP {}",
+            response.status()
+        )));
+    }
+    
+    let body: serde_json::Value = response.json().await
+        .map_err(|e| AppError::BadRequest(format!("解析响应失败: {}", e)))?;
+    
+    let device_code = body.get("device_code")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::BadRequest("缺少 device_code".to_string()))?;
+    
+    let user_code = body.get("user_code")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::BadRequest("缺少 user_code".to_string()))?;
+    
+    let verification_uri = body.get("verification_uri")
+        .and_then(|v| v.as_str())
+        .unwrap_or("https://github.com/login/device")
+        .to_string();
+    
+    let expires_in = body.get("expires_in")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(900);
+    
+    let interval = body.get("interval")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(5);
+    
+    // Store state
+    let state = GitHubOAuthState {
+        device_code: device_code.to_string(),
+        user_code: user_code.to_string(),
+        verification_uri: verification_uri.clone(),
+        pending: true,
+        access_token: None,
+        expires_at: None,
+    };
+    
+    let mut current = GITHUB_OAUTH_STATE.write().await;
+    *current = Some(state);
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "device_code": device_code,
+        "user_code": user_code,
+        "verification_uri": verification_uri,
+        "expires_in": expires_in,
+        "interval": interval,
+        "pending": true,
+    })))
+}
+
+/// Check GitHub Copilot OAuth status
+/// GET /api/providers/github-copilot/status
+pub async fn github_copilot_status() -> Result<Json<serde_json::Value>> {
+    let state_guard = GITHUB_OAUTH_STATE.read().await;
+    let state = state_guard.as_ref()
+        .ok_or_else(|| AppError::BadRequest("OAuth 流程未初始化".to_string()))?;
+    
+    if !state.pending {
+        // Authorization completed
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "pending": false,
+            "access_token": state.access_token,
+            "expires_at": state.expires_at,
+        })));
+    }
+    
+    // Try to exchange device code for token
+    let client = reqwest::Client::new();
+    let client_id = "Iv1.b507a08c87ecfe98";
+    
+    let response = client
+        .post("https://github.com/login/oauth/access_token")
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", client_id),
+            ("device_code", &state.device_code),
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+        ])
+        .send()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("检查状态失败: {}", e)))?;
+    
+    let body: serde_json::Value = response.json().await
+        .map_err(|e| AppError::BadRequest(format!("解析响应失败: {}", e)))?;
+    
+    // Check if we got an access token
+    if let Some(access_token) = body.get("access_token").and_then(|v| v.as_str()) {
+        let expires_in = body.get("expires_in").and_then(|v| v.as_u64());
+        let expires_at = expires_in.map(|e| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64 + e as i64
+        });
+        
+        // Update state with token
+        drop(state_guard);
+        let mut current = GITHUB_OAUTH_STATE.write().await;
+        if let Some(ref mut s) = *current {
+            s.pending = false;
+            s.access_token = Some(access_token.to_string());
+            s.expires_at = expires_at;
+        }
+        
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "pending": false,
+            "access_token": access_token,
+            "expires_at": expires_at,
+        })));
+    }
+    
+    // Check for error
+    let error = body.get("error").and_then(|v| v.as_str());
+    let error_description = body.get("error_description").and_then(|v| v.as_str());
+    
+    if error == Some("authorization_pending") {
+        // Still waiting for user authorization
+        return Ok(Json(serde_json::json!({
+            "success": true,
+            "pending": true,
+            "error": null,
+        })));
+    }
+    
+    if error == Some("authorization_declined") {
+        return Err(AppError::BadRequest("用户拒绝了授权请求".to_string()));
+    }
+    
+    if error == Some("expired_token") {
+        return Err(AppError::BadRequest("设备码已过期，请重新发起授权".to_string()));
+    }
+    
+    // Still pending or other error
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "pending": true,
+        "error": error,
+        "error_description": error_description,
+    })))
+}
 
 /// 获取所有 Provider 实例
 pub async fn list_providers(

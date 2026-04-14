@@ -53,6 +53,14 @@ pub fn build_api_router(
             post(api::providers::verify_provider),
         )
         .route(
+            "/api/providers/github-copilot/init",
+            post(api::providers::github_copilot_init),
+        )
+        .route(
+            "/api/providers/github-copilot/status",
+            get(api::providers::github_copilot_status),
+        )
+        .route(
             "/api/providers/:id",
             get(api::providers::get_provider)
                 .post(api::providers::save_provider)

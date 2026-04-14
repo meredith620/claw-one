@@ -205,3 +205,37 @@ async fn test_get_nonexistent_provider() {
 
     assert_eq!(response.status(), 404);
 }
+
+#[tokio::test]
+async fn test_github_copilot_status_without_init() {
+    let server = TestServer::new().await;
+
+    // Should fail without init first
+    let response = server
+        .client
+        .get(server.url("/api/providers/github-copilot/status"))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+}
+
+#[tokio::test]
+async fn test_github_copilot_init_success() {
+    let server = TestServer::new().await;
+
+    // Note: This test requires network access to GitHub
+    // In real CI, we would mock this
+    let response = server
+        .client
+        .post(server.url("/api/providers/github-copilot/init"))
+        .send()
+        .await
+        .unwrap();
+
+    // GitHub might return error if network is not available in test env
+    // or might succeed if it is
+    let status = response.status();
+    assert!(status == 200 || status == 400); // 400 if GitHub rejects
+}

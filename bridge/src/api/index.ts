@@ -29,6 +29,10 @@ export const saveProvider = (id: string, data: any) => api.post(`/providers/${id
 export const deleteProvider = (id: string) => api.delete(`/providers/${id}`)
 export const verifyProvider = (data: { apiKey: string; baseUrl: string; api: string }) => api.post('/providers/verify', data)
 
+// GitHub Copilot OAuth API
+export const githubCopilotInit = () => api.post('/providers/github-copilot/init')
+export const githubCopilotStatus = () => api.get('/providers/github-copilot/status')
+
 // 模型优先级 API
 export const getModelPriority = () => api.get('/model-priority')
 export const saveModelPriority = (data: { primary: string; fallbacks: string[] }) => 

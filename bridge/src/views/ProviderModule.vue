@@ -156,7 +156,30 @@
           <div class="form-hint">必须符合 OpenClaw 支持的 API 类型</div>
         </el-form-item>
         
-        <el-form-item label="API Key" required>
+        <!-- GitHub Copilot 使用 OAuth 登录 -->
+        <el-form-item v-if="currentType === 'github-copilot'" label="GitHub 登录">
+          <div v-if="!githubOAuthComplete">
+            <el-button type="primary" @click="initGithubOAuth" :loading="githubOAuthIniting">
+              {{ githubOAuthIniting ? '初始化中...' : '授权 GitHub Copilot' }}
+            </el-button>
+            <div v-if="githubDeviceCode" class="github-oauth-info">
+              <p>1. 访问以下网址：<a :href="githubDeviceCode.verification_uri" target="_blank">{{ githubDeviceCode.verification_uri }}</a></p>
+              <p>2. 输入验证码：<strong>{{ githubDeviceCode.user_code }}</strong></p>
+              <p>3. 在 GitHub 页面上点击授权</p>
+              <p>4. 授权完成后点击下方按钮完成验证</p>
+              <el-button type="success" @click="checkGithubOAuthStatus" :loading="githubPolling" :disabled="githubPolling">
+                {{ githubPolling ? '检查中...' : '完成授权' }}
+              </el-button>
+            </div>
+            <div v-if="githubOAuthError" class="verify-result error">{{ githubOAuthError }}</div>
+          </div>
+          <div v-else class="verify-result success">
+            ✅ GitHub Copilot 授权成功
+          </div>
+        </el-form-item>
+        
+        <!-- 其他 Provider 使用 API Key -->
+        <el-form-item v-else label="API Key" required>
           <el-input v-model="formData.apiKey" type="password" placeholder="输入 API Key" show-password>
             <template #append>
               <el-button @click="verifyCredentials" :loading="verifying" :disabled="verifying">
@@ -206,7 +229,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowDown, ArrowRight } from '@element-plus/icons-vue'
-import { getProviders, saveProvider, deleteProvider, getModelPriority, saveModelPriority, verifyProvider } from '../api'
+import { getProviders, saveProvider, deleteProvider, getModelPriority, saveModelPriority, verifyProvider, githubCopilotInit, githubCopilotStatus } from '../api'
 import { useConfigValidation } from '../composables/useConfigValidation'
 
 const providerTypes = [
@@ -214,6 +237,7 @@ const providerTypes = [
   { id: 'openai', name: 'OpenAI', icon: '🤖' },
   { id: 'anthropic', name: 'Anthropic', icon: '🧠' },
   { id: 'minimax', name: 'MiniMax', icon: '🔵' },
+  { id: 'github-copilot', name: 'GitHub Copilot', icon: '💻' },
   { id: 'custom', name: '其他 Provider', icon: '🔧' },
 ]
 
@@ -226,13 +250,20 @@ const verifying = ref(false)
 const verifyStatus = ref<{ valid: boolean; message: string } | null>(null)
 const verifyTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 
+// GitHub Copilot OAuth 状态
+const githubOAuthIniting = ref(false)
+const githubOAuthComplete = ref(false)
+const githubDeviceCode = ref<{ device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number } | null>(null)
+const githubPolling = ref(false)
+const githubOAuthError = ref<string | null>(null)
+
 // 配置验证
 const { validating, validateAndShow } = useConfigValidation()
 const currentType = ref('moonshot')
 const isEditing = ref(false)
 
 const instances = reactive<Record<string, any[]>>({
-  moonshot: [], openai: [], anthropic: [], minimax: [], custom: [],
+  moonshot: [], openai: [], anthropic: [], minimax: [], 'github-copilot': [], custom: [],
 })
 
 const modelPriority = reactive({
@@ -375,6 +406,12 @@ const getModelOptions = (typeId: string) => {
       { value: 'MiniMax-M2.7', label: 'MiniMax M2.7' },
       { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax M2.7 Highspeed' },
     ],
+    'github-copilot': [
+      { value: 'gpt-4o', label: 'GPT-4o' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+      { value: 'o1-mini', label: 'o1 Mini' },
+      { value: 'o1-preview', label: 'o1 Preview' },
+    ],
   }
   return opts[typeId] || []
 }
@@ -441,6 +478,22 @@ const getModelOptionGroups = (typeId: string) => {
         options: [
           { value: 'MiniMax-M2.7', label: 'MiniMax M2.7', desc: '通用推理，支持图像理解，204.8K上下文' },
           { value: 'MiniMax-M2.7-highspeed', label: 'MiniMax M2.7 Highspeed', desc: '快速推理，文本专用' },
+        ]
+      }
+    ],
+    'github-copilot': [
+      {
+        label: '推荐模型',
+        options: [
+          { value: 'gpt-4o', label: 'GPT-4o', desc: '最新多模态模型，性价比高' },
+          { value: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: '轻量快速，成本低' },
+        ]
+      },
+      {
+        label: 'o 系列',
+        options: [
+          { value: 'o1-mini', label: 'o1 Mini', desc: '快速推理模型' },
+          { value: 'o1-preview', label: 'o1 Preview', desc: '深度推理预览版' },
         ]
       }
     ],
@@ -695,6 +748,7 @@ const verifyCredentials = async () => {
         openai: { default: 'https://api.openai.com/v1' },
         anthropic: { default: 'https://api.anthropic.com/v1' },
         minimax: { global: 'https://api.minimax.io/anthropic', cn: 'https://api.minimaxi.com/anthropic' },
+        'github-copilot': { default: 'https://api.individual.githubcopilot.com' },
         custom: { default: '' },
       }
       baseUrl = baseUrls[currentType.value]?.[formData.region] || baseUrls[currentType.value]?.default || ''
@@ -739,9 +793,78 @@ const verifyCredentials = async () => {
   }
 }
 
+// GitHub Copilot OAuth 初始化
+const initGithubOAuth = async () => {
+  githubOAuthIniting.value = true
+  githubOAuthError.value = null
+  githubDeviceCode.value = null
+  
+  try {
+    const response = await githubCopilotInit()
+    if (response.data.success) {
+      githubDeviceCode.value = {
+        device_code: response.data.device_code,
+        user_code: response.data.user_code,
+        verification_uri: response.data.verification_uri,
+        expires_in: response.data.expires_in,
+        interval: response.data.interval,
+      }
+      ElMessage.info('请在浏览器中完成 GitHub 授权')
+    } else {
+      githubOAuthError.value = response.data.error || '初始化失败'
+      ElMessage.error(githubOAuthError.value)
+    }
+  } catch (e: any) {
+    githubOAuthError.value = e.message || '初始化失败'
+    ElMessage.error(githubOAuthError.value)
+  } finally {
+    githubOAuthIniting.value = false
+  }
+}
+
+// 检查 GitHub OAuth 状态
+const checkGithubOAuthStatus = async () => {
+  githubPolling.value = true
+  githubOAuthError.value = null
+  
+  try {
+    const response = await githubCopilotStatus()
+    if (response.data.pending) {
+      // 仍在等待授权
+      githubOAuthError.value = '尚未完成授权，请确保已在 GitHub 页面点击授权'
+      ElMessage.warning(githubOAuthError.value)
+    } else if (!response.data.pending && response.data.access_token) {
+      // 授权成功
+      githubOAuthComplete.value = true
+      formData.apiKey = response.data.access_token
+      formData.baseUrl = 'https://api.individual.githubcopilot.com'
+      formData.api = 'openai-chat'
+      verifyStatus.value = { valid: true, message: 'GitHub Copilot 授权成功' }
+      ElMessage.success('GitHub Copilot 授权成功！')
+    } else if (response.data.error) {
+      githubOAuthError.value = response.data.error_description || response.data.error
+      ElMessage.error(githubOAuthError.value)
+    }
+  } catch (e: any) {
+    githubOAuthError.value = e.message || '检查状态失败'
+    ElMessage.error(githubOAuthError.value)
+  } finally {
+    githubPolling.value = false
+  }
+}
+
 // region 切换时重置 verifyStatus
 watch(() => formData.region, () => {
   verifyStatus.value = null
+})
+
+// GitHub Copilot 类型切换时重置 OAuth 状态
+watch(() => currentType.value, (newType) => {
+  if (newType !== 'github-copilot') {
+    githubOAuthComplete.value = false
+    githubDeviceCode.value = null
+    githubOAuthError.value = null
+  }
 })
 
 onMounted(loadData)
@@ -937,5 +1060,23 @@ onMounted(loadData)
   background: #fff2f0;
   color: #cf1322;
   border: 1px solid #ffccc7;
+}
+
+.github-oauth-info {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.github-oauth-info p {
+  margin: 4px 0;
+}
+
+.github-oauth-info a {
+  color: #409eff;
+  word-break: break-all;
 }
 </style>
