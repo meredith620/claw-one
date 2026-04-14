@@ -529,10 +529,7 @@ const saveInstance = async () => {
   if (currentType.value === 'custom' && !formData.api && !isEditing.value) {
     ElMessage.error('请选择 API 协议'); return
   }
-  // MiniMax API Key 格式校验（JWT 格式：eyJ 开头）
-  if (formData.api === 'anthropic-messages' && !formData.apiKey.startsWith('eyJ')) {
-    ElMessage.error('MiniMax API Key 格式不正确（应为 JWT 格式，以 eyJ 开头）'); return
-  }
+  // MiniMax API Key 格式校验已移除（MiniMax 实际不使用 JWT 格式）
   if (!formData.apiKey) { ElMessage.error('请输入 API Key'); return }
   if (!formData.defaultModel) { ElMessage.error('请选择默认模型'); return }
 
@@ -650,10 +647,7 @@ const validateApiKeyFormat = (apiKey: string, apiType: string): { valid: boolean
     return { valid: false, message: '请输入 API Key' }
   }
 
-  // MiniMax: JWT 格式校验（eyJ 开头）
-  if (apiType === 'anthropic-messages' && !/^eyJ[A-Za-z0-9-_]+$/.test(apiKey)) {
-    return { valid: false, message: 'MiniMax API Key 格式不正确（应为 JWT 格式）' }
-  }
+  // MiniMax API Key 格式校验已移除（MiniMax 实际不使用 JWT 格式，eyJ 前缀要求不正确）
 
   // OpenAI: 应以 sk- 开头
   if ((apiType === 'openai-chat' || apiType === 'openai-completions' || apiType === 'openai-responses' || apiType === 'openai-codex-responses') && !apiKey.startsWith('sk-')) {

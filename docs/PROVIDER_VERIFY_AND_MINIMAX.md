@@ -310,7 +310,7 @@ watch(() => formData.region, (region) => {
 | **P1** | MiniMax region 默认值未定义 | 明确默认值为 `global` |
 | **P2** | 验证按钮 loading 时可重复点击 | 添加 `:disabled="verifying"` |
 | **P2** | 无超时反馈 | 添加超时检测，10s 后提示用户 |
-| **P2** | MiniMax API Key 格式校验不精确 | 改用正则校验：`^eyJ[A-Za-z0-9-_]+$`（JWT 格式） |
+| **P2** | MiniMax API Key 格式校验不精确 | ~~改用正则校验：`^eyJ[A-Za-z0-9-_]+$`（JWT 格式）~~ 已移除（MiniMax 不使用 JWT 格式） |
 
 ### 4.3 前端实现
 
@@ -322,12 +322,7 @@ const validateApiKeyFormat = (apiKey: string, apiType: string): { valid: boolean
     return { valid: false, message: '请输入 API Key' }
   }
 
-  // MiniMax: JWT 格式校验（eyJ 开头）
-  if (apiType === 'anthropic-messages') {
-    if (!/^eyJ[A-Za-z0-9-_]+$/.test(apiKey)) {
-      return { valid: false, message: 'MiniMax API Key 格式不正确（应为 JWT 格式）' }
-    }
-  }
+  // MiniMax API Key 格式校验已移除（MiniMax 不使用 JWT 格式，eyJ 前缀要求不正确）
 
   // OpenAI: 应以 sk- 开头
   if (apiType === 'openai-chat' && !apiKey.startsWith('sk-')) {
