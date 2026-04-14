@@ -1,8 +1,8 @@
 # Provider 增强功能设计
 
-**版本**: v1.4
+**版本**: v1.5
 **日期**: 2026-04-14
-**状态**: 待开发（Review P0/P1/P2 已全部修复，Moonshot 基于源码补充，MiniMax 模型目录已完善）
+**状态**: 待开发（P0 问题已全部修复）
 
 ---
 
@@ -303,6 +303,8 @@ watch(() => formData.region, (region) => {
 | **P0** | Anthropic 验证逻辑 bug | `content` 是数组，需检查 `as_array().map(\|a\| !a.is_empty())` |
 | **P0** | openai-completions 漏实现 | 添加 `verify_openai_compatible` 分支 |
 | **P0** | 无用 Extension(config_manager) | 移除未使用的 Extension |
+| **P0** | OpenAI 兼容验证只检查 HTTP 状态 | 需检查 `data` 数组非空 |
+| **P0** | Anthropic 验证未排除 error 响应 | 需检查 `error` 字段不存在 |
 | **P1** | region 切换时未清除验证状态 | 重置 `verifyStatus` |
 | **P1** | 格式校验失败无 UI 反馈 | 格式错误时设置 `verifyStatus` 显示错误 |
 | **P1** | MiniMax region 默认值未定义 | 明确默认值为 `global` |
@@ -487,7 +489,19 @@ async fn verify_openai_compatible(base_url: &str, api_key: &str) -> Result<bool>
             }
         })?;
 
-    Ok(response.status().is_success())
+    // P0 修复: 仅检查 HTTP 200 不够，需验证响应体中 models 数组非空
+    // OpenAI 兼容 API 返回 { "data": [...models...] }
+    if response.status().is_success() {
+        let body: serde_json::Value = response.json().await
+            .map_err(|e| AppError::BadRequest(format!("解析响应失败: {}", e)))?;
+        let valid = body.get("data")
+            .and_then(|d| d.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+        Ok(valid)
+    } else {
+        Ok(false)
+    }
 }
 
 async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bool> {
@@ -514,15 +528,21 @@ async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bo
             }
         })?;
 
-    // P0 修复: Anthropic 返回 200 即使 key 无效，content 是数组需要检查非空
+    // P0 修复: Anthropic 返回 200 即使 key 无效
+    // 1. content 数组需要非空
+    // 2. 需要排除 error 响应（如 { "error": { "type": "authentication_error" } }）
     if response.status() == 200 {
         let body: serde_json::Value = response.json().await?;
+        // 先检查是否有 error 字段，有 error 则验证失败
+        if body.get("error").is_some() {
+            return Ok(false);
+        }
         // content 是 MessageContent 数组，需要检查数组非空
-        let valid = body.get("content")
+        let content_valid = body.get("content")
             .and_then(|c| c.as_array())
             .map(|a| !a.is_empty())
             .unwrap_or(false);
-        Ok(valid)
+        Ok(content_valid)
     } else {
         Ok(false)
     }
