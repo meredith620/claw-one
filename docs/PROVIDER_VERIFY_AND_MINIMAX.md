@@ -1,8 +1,8 @@
 # Provider 增强功能设计
 
-**版本**: v1.3
+**版本**: v1.4
 **日期**: 2026-04-14
-**状态**: 待开发（Review P0/P1/P2 已全部修复，Moonshot 基于源码补充）
+**状态**: 待开发（Review P0/P1/P2 已全部修复，Moonshot 基于源码补充，MiniMax 模型目录已完善）
 
 ---
 
@@ -56,18 +56,33 @@ const minimaxBaseUrls = {
 }
 ```
 
+> **注意**: 还有 `https://api.minimax.io/v1` 端点，用于非 Anthropic 兼容场景。
+
 #### API 类型
 
 MiniMax 使用 Anthropic 兼容的 API：
 - API 类型: `anthropic-messages`
+- authHeader: true
 
-#### 默认模型
+#### 模型目录（基于 OpenClaw 源码）
 
 ```typescript
-const minimaxModels = [
-  { id: 'MiniMax-M2.7', name: 'MiniMax M2.7', reasoning: true },
-  { id: 'MiniMax-M2.7-highspeed', name: 'MiniMax M2.7 Highspeed', reasoning: true },
-]
+const MINIMAX_TEXT_MODEL_CATALOG = {
+  "MiniMax-M2.7": {
+    name: "MiniMax M2.7",
+    reasoning: true,
+    input: ["text", "image"],  // M2.7 支持图像理解
+  },
+  "MiniMax-M2.7-highspeed": {
+    name: "MiniMax M2.7 Highspeed",
+    reasoning: true,
+    input: ["text"],
+  },
+};
+
+const DEFAULT_MINIMAX_CONTEXT_WINDOW = 204800;
+const DEFAULT_MINIMAX_MAX_TOKENS = 131072;
+const MINIMAX_DEFAULT_MODEL_ID = "MiniMax-M2.7";
 ```
 
 ### 2.3 前端实现
@@ -112,13 +127,16 @@ if (isMinimax) {
 ```
 
 ```typescript
-// MiniMax 表单默认值
+// MiniMax 表单默认值（基于 OpenClaw 源码）
 const getDefaultFormData = (type: string) => {
   if (type === 'minimax') {
     return {
       region: 'global',  // P1 修复: 明确默认值
       baseUrl: 'https://api.minimax.io/anthropic',
       api: 'anthropic-messages',
+      defaultModel: 'MiniMax-M2.7',
+      contextWindow: 204800,
+      maxTokens: 131072,
     }
   }
   // ...
@@ -158,6 +176,8 @@ const MOONSHOT_CN_BASE_URL = "https://api.moonshot.cn/v1";
 // Moonshot 使用 OpenAI 兼容 API
 const api = "openai-completions";
 ```
+
+> **Moonshot Verify 说明**: Moonshot 使用 `openai-completions`，Verify API 用 `GET /models` 验证。Moonshot API 是 OpenAI 兼容的，`/models` 端点应正常工作。
 
 #### 模型目录（Model Catalog）
 
