@@ -153,44 +153,56 @@ test.describe('User Workflows', () => {
       const channelExistsBefore = await verifyChannelViaAPI(testChannelId, { name: testChannelName });
       expect(channelExistsBefore).toBeTruthy();
       
-      // 4. 测试 UI 删除流程（API DELETE 未实现，验证 UI 交互）
-      // 设置 dialog 处理器
+      // 4. 找到删除按钮并点击
+      const accountLocator = page.locator('.account-name', { hasText: testChannelName });
+      await expect(accountLocator).toBeVisible({ timeout: 5000 });
+      await accountLocator.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+      
+      // 找到删除按钮 - 在账号名称的父容器中找按钮容器
+      const deleteButton = accountLocator.locator('..').locator('..').locator('button:has-text("删除")').first();
+      const isEnabled = await deleteButton.isEnabled();
+      console.log('[Workflow Channel Delete] 删除按钮是否可用:', isEnabled);
+      
+      // 设置 dialog 处理器（在点击删除之前）
       page.on('dialog', async dialog => {
         console.log('[Workflow Channel Delete] 检测到对话框:', dialog.message());
         await dialog.accept();
       });
       
-      // 找到删除按钮并点击
-      const accountLocator = page.locator('.account-name', { hasText: testChannelName });
-      await expect(accountLocator).toBeVisible({ timeout: 5000 });
-      await accountLocator.scrollIntoViewIfNeeded();
-      
-      const deleteButton = accountLocator.locator('..').locator('..').locator('button:has-text("删除")').first();
-      await deleteButton.click();
+      // 点击删除按钮
+      await deleteButton.click({ force: true, timeout: 5000 });
       console.log('[Workflow Channel Delete] 删除按钮已点击');
       
-      // 等待对话框
-      await page.waitForSelector('button:has-text("OK")', { timeout: 3000 }).catch(() => {
-        console.log('[Workflow Channel Delete] OK 按钮未出现');
+      // 等待对话框出现 - Element UI dialog 使用确定按钮
+      await page.waitForSelector('button:has-text("确定")', { timeout: 3000 }).catch(() => {
+        console.log('[Workflow Channel Delete] 确定按钮未找到');
       });
       
-      // 如果对话框出现，点击 OK
-      const okButton = page.locator('button:has-text("OK")');
-      if (await okButton.isVisible({ timeout: 500 }).catch(() => false)) {
-        await okButton.click();
-        console.log('[Workflow Channel Delete] 点击了 OK 按钮');
+      // 如果对话框出现了，点击确定
+      const confirmButton = page.locator('button:has-text("确定")');
+      if (await confirmButton.isVisible({ timeout: 500 }).catch(() => false)) {
+        await confirmButton.click();
+        console.log('[Workflow Channel Delete] 点击了确定按钮');
       }
       
       // 等待删除操作
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
       
-      // 注意：Channel DELETE API 返回 405，后端未实现删除功能
-      // 因此跳过 API 验证和 UI 验证，仅验证 ConfigVerifier（skip 模式）
-      console.log('[Workflow Channel Delete] 注意：后端 API DELETE 未实现，跳过完整验证');
+      // 5. API 验证：账号已删除
+      const channelDeleted = !(await verifyChannelViaAPI(testChannelId));
+      console.log('[Workflow Channel Delete] API 验证删除结果:', channelDeleted);
+      expect(channelDeleted).toBeTruthy();
+      console.log('[Workflow Channel Delete] API 验证通过：账号已从后端移除');
       
-      // 7. 文件层验证（skip 模式）
+      // 6. UI 验证：账号名称不再显示
+      await expect(page.locator('.account-name', { hasText: testChannelName })).not.toBeVisible({ timeout: 5000 });
+      console.log('[Workflow Channel Delete] UI 验证通过：账号已从界面移除');
+      
+      // 7. 文件层验证
       const inFile = await ConfigVerifier.verifyChannelDeleted(testChannelId);
       expect(inFile).toBeTruthy();
+      console.log('[Workflow Channel Delete] ConfigVerifier 文件验证通过：账号已从 openclaw.json 移除');
     } finally {
       await deleteChannelViaAPI(testChannelId);
     }
