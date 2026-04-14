@@ -1368,11 +1368,48 @@ impl ConfigManager {
         // 过滤事件对象字段（Bug #1 防护）
         let filtered_channels = Self::filter_event_fields(channels);
 
-        // 深度合并：保留现有配置，新配置覆盖
+        // 对于 channels.mattermost.accounts 等嵌套对象，需要完全替换而非深度合并
+        // 否则删除的账号会被保留（因为 deep_merge 只添加/更新，不删除）
+        // 但对于顶层 channel 配置（如 enabled, dmPolicy 等），可以合并
         let existing_channels = config.get("channels").cloned();
         let merged_channels = if let Some(existing) = existing_channels {
             if existing.is_object() && filtered_channels.is_object() {
-                Self::deep_merge(&existing, &filtered_channels)
+                // 分层合并
+                let existing_obj = existing.as_object().unwrap();
+                let new_obj = filtered_channels.as_object().unwrap();
+                let mut result = existing_obj.clone();
+                for (key, new_val) in new_obj.iter() {
+                    if let Some(existing_val) = result.get(key) {
+                        if existing_val.is_object() && new_val.is_object() {
+                            // 如果两边都是对象，检查是否是 channel type (mattermost/feishu/ding/lark)
+                            // 如果是 channel type，需要分层处理
+                            if key == "mattermost" || key == "feishu" || key == "ding" || key == "lark" {
+                                let existing_channel = existing_val.as_object().unwrap();
+                                let new_channel = new_val.as_object().unwrap();
+                                let mut channel_result = existing_channel.clone();
+                                for (channel_key, channel_new_val) in new_channel.iter() {
+                                    if channel_key == "accounts" {
+                                        // accounts 完全替换（支持删除）
+                                        channel_result.insert(channel_key.clone(), channel_new_val.clone());
+                                    } else if channel_new_val.is_object() && channel_result.get(channel_key).map(|v| v.is_object()).unwrap_or(false) {
+                                        channel_result.insert(channel_key.clone(), Self::deep_merge(channel_result.get(channel_key).unwrap(), channel_new_val));
+                                    } else {
+                                        channel_result.insert(channel_key.clone(), channel_new_val.clone());
+                                    }
+                                }
+                                result.insert(key.clone(), serde_json::Value::Object(channel_result));
+                            } else {
+                                // 其他嵌套对象继续合并
+                                result.insert(key.clone(), Self::deep_merge(existing_val, new_val));
+                            }
+                        } else {
+                            result.insert(key.clone(), new_val.clone());
+                        }
+                    } else {
+                        result.insert(key.clone(), new_val.clone());
+                    }
+                }
+                serde_json::Value::Object(result)
             } else {
                 filtered_channels
             }

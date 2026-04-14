@@ -98,8 +98,8 @@ test.describe('Memory Configuration', () => {
     // 7. 保存（禁用状态）
     await page.click('button:has-text("保存 Memory 配置")');
     
-    // 8. 验证禁用保存成功消息
-    await expect(page.locator('.el-message:has-text("保存成功")')).toBeVisible({ timeout: 5000 });
+    // 8. 验证禁用保存成功消息（使用 .first() 避免 strict mode violation）
+    await expect(page.locator('.el-message:has-text("保存成功")').first()).toBeVisible({ timeout: 5000 });
     console.log('[Memory Delete] UI 保存成功消息已显示');
     
     // 9. 文件层验证：Memory 配置中 enabled 已为 false

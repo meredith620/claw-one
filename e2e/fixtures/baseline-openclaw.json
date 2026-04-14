@@ -1,9 +1,13 @@
 {
-  "models": { "providers": {} },
+  "models": {
+    "providers": {}
+  },
   "agents": {
     "defaults": {
       "workspace": "~/.openclaw/workspace",
-      "compaction": { "mode": "safeguard" },
+      "compaction": {
+        "mode": "safeguard"
+      },
       "maxConcurrent": 4
     },
     "list": []

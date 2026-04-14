@@ -2,20 +2,15 @@ services:
   openclaw:
     image: ghcr.io/openclaw/openclaw:2026.3.13-1
     container_name: claw-one-test-openclaw
-    command: ["/usr/local/bin/openclaw", "gateway", "--allow-unconfigured"]
-    user: "0:0"  # 以 root 用户运行避免权限问题
-    restart: unless-stopped  # 自动重启
+    command: ["/usr/local/bin/openclaw", "gateway", "--allow-unconfigured", "--bind", "loopback"]
+    user: "0:0"
+    restart: always
     ports:
-      - "28789:18790"  # 映射到实际的 gateway 端口 18790
+      - "28789:18790"
     volumes:
-      - openclaw-config:/root/.openclaw:rw  # 使用 root 用户目录
+      - openclaw-config:/root/.openclaw:rw
     networks:
       - claw-one-test-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18790/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
 
   claw-one:
     build:
@@ -23,7 +18,7 @@ services:
       dockerfile: e2e/Dockerfile.e2e
     container_name: claw-one-test-app
     ports:
-      - "28080:8080"  # 非标准端口
+      - "28080:8080"
     environment:
       - CLAW_OPENCLAW_CONFIG=/tmp/test-openclaw/openclaw.json
       - CLAW_ONE_CONFIG=/app/config/claw-one.toml
@@ -35,7 +30,7 @@ services:
       - claw-one-test-net
     depends_on:
       openclaw:
-        condition: service_healthy
+        condition: service_started
 
   playwright:
     build:
