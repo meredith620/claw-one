@@ -16,7 +16,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ startsWith(inputs.arch, 'aarch64-apple') && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ contains(inputs.arch, 'apple') && 'macos-latest' || 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +24,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Add target
         run: rustup target add ${{ inputs.arch }}
+      - name: Install cross-compilation toolchain
+        if: contains(inputs.arch, 'linux')
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Build hull
         working-directory: ./hull
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc
         run: cargo build --release --target ${{ inputs.arch }}
       - name: Build bridge
         working-directory: ./bridge
