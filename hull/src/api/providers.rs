@@ -422,7 +422,9 @@ async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bo
             }
         })?;
 
-    if response.status() == 200 {
+    // 区分认证错误和服务端错误
+    let status = response.status();
+    if status == 200 {
         let body: serde_json::Value = response.json().await
             .map_err(|e| AppError::BadRequest(format!("解析响应失败: {}", e)))?;
         if body.get("error").is_some() {
@@ -434,7 +436,11 @@ async fn verify_anthropic_compatible(base_url: &str, api_key: &str) -> Result<bo
             .map(|a| !a.is_empty())
             .unwrap_or(false);
         Ok(content_valid)
+    } else if status.as_u16() >= 500 {
+        // 5xx 服务端错误（529 过载、502 网关错误等）不是凭证问题
+        Err(AppError::BadRequest(format!("服务暂时不可用 (HTTP {}), 请稍后重试", status.as_u16())))
     } else {
+        // 4xx 客户端错误通常是认证问题
         Ok(false)
     }
 }
