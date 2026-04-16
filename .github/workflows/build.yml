@@ -1,0 +1,57 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: false
+        default: 'aarch64-apple-darwin'
+        type: choice
+        options:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+          - aarch64-unknown-linux-musl
+          - x86_64-unknown-linux-musl
+
+jobs:
+  build:
+    runs-on: ${{ inputs.arch == 'aarch64-apple-darwin' || inputs.arch == 'x86_64-apple-darwin' && 'macos-latest' || 'ubuntu-latest' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add target
+        run: rustup target add ${{ inputs.arch }}
+
+      - name: Build hull
+        working-directory: ./hull
+        run: cargo build --release --target ${{ inputs.arch }}
+
+      - name: Build bridge
+        working-directory: ./bridge
+        run: |
+          npm install
+          npx vite build
+
+      - name: Package
+        run: |
+          VERSION=$(git describe --tags --always --dirty)
+          ARCH=${{ inputs.arch }}
+          DIST_NAME="claw-one-${VERSION}-${ARCH}"
+          mkdir -p "dist/${DIST_NAME}/bin"
+          mkdir -p "dist/${DIST_NAME}/share/static"
+          cp "hull/target/${{ inputs.arch }}/release/claw-one" "dist/${DIST_NAME}/bin/"
+          cp -r "bridge/dist/"* "dist/${DIST_NAME}/share/static/"
+          tar czf "dist/${DIST_NAME}.tar.gz" "${DIST_NAME}/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claw-one-${{ inputs.arch }}
+          path: dist/*.tar.gz
+          retention-days: 7
